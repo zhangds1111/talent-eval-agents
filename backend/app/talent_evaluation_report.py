@@ -10,6 +10,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field, ValidationError
 from typing_extensions import TypedDict
 
+from app.product_compliance import ProductFacts
 from app.talent_evaluation_dispatch import BranchEvidenceDraft, EvaluationDimension
 
 logger = logging.getLogger(__name__)
@@ -111,6 +112,19 @@ class CandidateAssessment(BaseModel):
     confidence: Literal["high", "medium", "low"]
     dimensions: list[DimensionAssessment]
     consistency_issues: list[ConsistencyIssue] = Field(default_factory=list)
+    product_facts: ProductFacts | None = Field(
+        default=None,
+        description="程序计算的毛利与必需认证核对结果，不经过 LLM",
+    )
+
+    @property
+    def certification_gap_count(self) -> int | None:
+        if self.product_facts is None or not self.product_facts.certification_checks:
+            return None
+        return len(self.product_facts.certification_gaps)
+
+
+ProductFactsLoader = Callable[[list[str]], dict[str, ProductFacts]]
 
 
 class EvidenceItem(BaseModel):
@@ -378,6 +392,8 @@ title 是整份报告标题，overview 按当前排名概括总体差异，candi
 CandidateReportDraft.summary 概括当前商品的得分、覆盖率与置信度，highlights 只整理有证据的主要依据。
 每个商品最多 8 条 highlights、8 条 risks，每条 highlight 最多引用 8 个 evidence_refs，选择直接支撑该判断的证据。
 risks 只整理输入中已有的缺失、冲突、执行失败和置信度风险，不得推测新风险。
+product_facts 是程序计算结果：unit_economics 为毛利核算，certification_checks 为按「市场×品类」规则核对的必需认证（evidenced 有证据，missing/expired/model_mismatch 缺有效证据）。
+certification_checks 中非 evidenced 的项必须写进 risks，表述为「缺少有效的 X 证据（原因）」，不得改写数字或状态。
 报告只能表述「有证据/缺证据」及证据所示事实，不得对认证合规性下「合规/不合规」结论。
 报告草稿只负责概述、主要依据和风险表达，Markdown 与可点击链接由程序渲染。
 """.strip()
@@ -595,9 +611,11 @@ def aggregate_candidate_assessments(
 def rank_candidate_assessments(
     candidates: list[CandidateAssessment],
 ) -> list[CandidateAssessment]:
+    """必需认证缺口少者优先（程序核对，无数据视为未知、不惩罚），其次按已确认得分。"""
     return sorted(
         candidates,
         key=lambda item: (
+            item.certification_gap_count or 0,
             -item.confirmed_score,
             -item.evidence_coverage_percent,
             item.candidate_id,
@@ -931,7 +949,18 @@ def _review_consistency(
     return review_consistency
 
 
-def _aggregate_candidates(state: TalentEvaluationReportState) -> dict[str, Any]:
+def _aggregate_candidates(product_facts_loader: ProductFactsLoader | None = None):
+    def aggregate(state: TalentEvaluationReportState) -> dict[str, Any]:
+        result = _aggregate_candidates_core(state, product_facts_loader)
+        return result
+
+    return aggregate
+
+
+def _aggregate_candidates_core(
+    state: TalentEvaluationReportState,
+    product_facts_loader: ProductFactsLoader | None,
+) -> dict[str, Any]:
     dimensions = [EvaluationDimension.model_validate(item) for item in state["dimensions"]]
     assessments = [
         DimensionAssessment.model_validate(item) for item in state["dimension_assessments"]
@@ -952,9 +981,14 @@ def _aggregate_candidates(state: TalentEvaluationReportState) -> dict[str, Any]:
             "consistency_issues": [item.message for item in consistency_issues],
         },
     )
-    ranked = rank_candidate_assessments(
-        aggregate_candidate_assessments(dimensions, assessments, consistency_issues)
-    )
+    aggregated = aggregate_candidate_assessments(dimensions, assessments, consistency_issues)
+    if product_facts_loader is not None and aggregated:
+        facts = product_facts_loader([item.candidate_id for item in aggregated])
+        aggregated = [
+            item.model_copy(update={"product_facts": facts.get(item.candidate_id)})
+            for item in aggregated
+        ]
+    ranked = rank_candidate_assessments(aggregated)
     _log_node(
         "aggregate_candidates",
         "output",
@@ -968,6 +1002,7 @@ def _aggregate_candidates(state: TalentEvaluationReportState) -> dict[str, Any]:
                     "possible_score": item.possible_score,
                     "evidence_coverage_percent": item.evidence_coverage_percent,
                     "confidence": item.confidence,
+                    "certification_gaps": item.certification_gap_count,
                 }
                 for item in ranked
             ],
@@ -1079,10 +1114,35 @@ def render_report_markdown(
                     for ref_id in point.evidence_refs
                 )
                 lines.append(f"- {point.text} {citations}")
+        lines.extend(_render_product_facts(candidate.product_facts))
         if candidate_draft.risks:
             lines.extend(["", "### 风险与缺失", ""])
             lines.extend(f"- {item}" for item in candidate_draft.risks)
     return "\n".join(lines).strip()
+
+
+_CHECK_LABELS = {
+    "evidenced": "有证据",
+    "missing": "缺证据：未提供",
+    "expired": "缺有效证据：已过期",
+    "model_mismatch": "缺有效证据：型号不符",
+}
+
+
+def _render_product_facts(facts: ProductFacts | None) -> list[str]:
+    if facts is None or (facts.unit_economics is None and not facts.certification_checks):
+        return []
+    lines = ["", "### 程序核算（非模型生成）", ""]
+    economics = facts.unit_economics
+    if economics is not None:
+        lines.append(
+            f"- 毛利：售价 {economics.target_price:.2f} {economics.currency}，"
+            f"到岸成本 {economics.landed_cost:.2f} {economics.currency}，"
+            f"毛利 {economics.gross_profit:.2f}，毛利率 **{economics.gross_margin_percent:.1f}%**"
+        )
+    for check in facts.certification_checks:
+        lines.append(f"- 必需认证 {check.certification}：{_CHECK_LABELS[check.status]}（{check.detail}）")
+    return lines
 
 
 def _validate_and_render_report(state: TalentEvaluationReportState) -> dict[str, Any]:
@@ -1123,6 +1183,7 @@ def build_talent_evaluation_report_graph(
     report_writer: ReportWriter,
     max_scoring_concurrency: int = 12,
     max_consistency_concurrency: int = 12,
+    product_facts_loader: ProductFactsLoader | None = None,
 ):
     reviewer = consistency_reviewer or (
         lambda assessments, evidence_items: ConsistencyReview()
@@ -1143,7 +1204,7 @@ def build_talent_evaluation_report_graph(
             max_concurrency=max_consistency_concurrency,
         ),
     )
-    builder.add_node("aggregate_candidates", _aggregate_candidates)
+    builder.add_node("aggregate_candidates", _aggregate_candidates(product_facts_loader))
     builder.add_node("compose_report", _compose_report(report_writer))
     builder.add_node("validate_report", _validate_and_render_report)
     builder.add_edge(START, "receive_input")

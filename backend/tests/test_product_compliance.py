@@ -93,3 +93,28 @@ def test_price_filter_rejects_non_numeric_operator():
     with pytest.raises(ValueError):
         FilterCondition(field="region", operator="gte", value=1)
     assert FilterCondition(field="target_price", operator="lte", value=20).value == 20
+
+
+def test_ranking_puts_certification_gaps_after_and_report_renders_program_facts():
+    from app.product_compliance import CertificationCheck, ProductFacts
+    from app.talent_evaluation_report import CandidateAssessment, _render_product_facts, rank_candidate_assessments
+
+    def candidate(cid, score, statuses):
+        facts = ProductFacts(
+            candidate_id=cid,
+            unit_economics=compute_unit_economics(currency="USD", target_price=20, landed_cost=11),
+            certification_checks=[
+                CertificationCheck(certification=f"C{i}", rationale="r", status=st, detail="d")
+                for i, st in enumerate(statuses)
+            ],
+        )
+        return CandidateAssessment(candidate_id=cid, confirmed_score=score, possible_score=score,
+                                   evidence_coverage_percent=100, confidence="high", dimensions=[], product_facts=facts)
+
+    high_but_gap = candidate("A", 90, ["evidenced", "expired"])
+    lower_clean = candidate("B", 60, ["evidenced"])
+    unknown = CandidateAssessment(candidate_id="C", confirmed_score=70, possible_score=70,
+                                  evidence_coverage_percent=100, confidence="high", dimensions=[])
+    assert [c.candidate_id for c in rank_candidate_assessments([high_but_gap, lower_clean, unknown])] == ["C", "B", "A"]
+    text = "\n".join(_render_product_facts(high_but_gap.product_facts))
+    assert "毛利率 **45.0%**" in text and "缺有效证据：已过期" in text

@@ -126,6 +126,14 @@ def build_runtime_graph():
     return runtime_graph
 
 
+def _load_product_facts(candidate_ids: list[str]):
+    from app.database import SessionLocal
+    from app.product_compliance import load_product_facts
+
+    with SessionLocal() as db:
+        return load_product_facts(db, candidate_ids)
+
+
 def build_report_runtime_graph():
     logger.info(
         "event=report_runtime_graph_build_started "
@@ -140,6 +148,7 @@ def build_report_runtime_graph():
         report_writer=build_structured_report_writer(lambda: model),
         max_scoring_concurrency=12,
         max_consistency_concurrency=12,
+        product_facts_loader=_load_product_facts,
     )
     logger.info(
         "event=report_runtime_graph_build_completed "

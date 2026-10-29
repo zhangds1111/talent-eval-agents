@@ -1189,7 +1189,9 @@ def test_report_runtime_builds_graph_with_structured_model_components(monkeypatc
         "report_writer",
         "max_scoring_concurrency",
         "max_consistency_concurrency",
+        "product_facts_loader",
     }
+    assert callable(report_kwargs["product_facts_loader"])
     assert callable(report_kwargs["dimension_scorer"])
     assert callable(report_kwargs["consistency_reviewer"])
     assert callable(report_kwargs["report_writer"])
