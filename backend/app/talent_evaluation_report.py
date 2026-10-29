@@ -763,12 +763,36 @@ def _score_dimensions(
                 )
 
             branch_evidence = [evidence_by_id[ref_id] for ref_id in evidence_refs]
-            judgement = dimension_scorer(
-                dimensions[branch.dimension_number],
-                branch,
-                branch_evidence,
-            )
-            validate_dimension_judgement(branch, judgement)
+            # 模型偶发输出自相矛盾的判断（如 partial 却无分数）：重试一次；
+            # 仍不合法则该维度记为 failed（不计分、降低置信度），不让单个维度拖垮整次评估。
+            judgement = None
+            last_error = ""
+            for _ in range(2):
+                candidate = dimension_scorer(
+                    dimensions[branch.dimension_number],
+                    branch,
+                    branch_evidence,
+                )
+                try:
+                    validate_dimension_judgement(branch, candidate)
+                except ValueError as exc:
+                    last_error = str(exc)
+                    continue
+                judgement = candidate
+                break
+            if judgement is None:
+                return DimensionAssessment(
+                    task_id=branch.task_id,
+                    candidate_id=branch.candidate_id,
+                    dimension_number=branch.dimension_number,
+                    evidence_status="failed",
+                    score=None,
+                    confidence="unavailable",
+                    evidence_refs=[],
+                    missing_items=[f"维度评分输出不合法：{last_error}"],
+                    conflicts=[],
+                    rationale=f"维度评分输出两次未通过校验：{last_error}",
+                )
             _log_node(
                 "score_dimensions",
                 "scoring",

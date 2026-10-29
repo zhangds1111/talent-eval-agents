@@ -1309,3 +1309,44 @@ def test_report_graph_derives_evidence_items_and_missing_information_from_branch
 
     assert result["evidence_items"][0]["ref_id"] == "chunk-1"
     assert "[E1](/api/evidence/citations/chunk-1?quote_start=0&quote_end=10)" in result["report"]
+
+
+@pytest.mark.parametrize("bad_attempts, expected_status", [(1, "partial"), (2, "failed")])
+def test_invalid_dimension_judgement_is_retried_then_marked_failed(bad_attempts, expected_status):
+    from app.talent_evaluation_report import (
+        CandidateReportDraft,
+        DimensionJudgement,
+        ReportDraft,
+        build_talent_evaluation_report_graph,
+    )
+
+    calls = []
+
+    def scorer(dimension, branch, evidence):
+        calls.append(branch.task_id)
+        if len(calls) <= bad_attempts:
+            # partial 却没有分数：不合法
+            return DimensionJudgement(evidence_status="partial", score=None, confidence="medium",
+                                      evidence_refs=["chunk-1"], rationale="漏填分数")
+        return DimensionJudgement(evidence_status="partial", score=3, confidence="medium",
+                                  evidence_refs=["chunk-1"], rationale="已有事实")
+
+    def report_writer(candidates, evidence):
+        return ReportDraft(title="选品报告", overview="概述", candidates=[
+            CandidateReportDraft(candidate_id="SKU-1", summary="摘要", highlights=[], risks=[]),
+        ])
+
+    graph = build_talent_evaluation_report_graph(dimension_scorer=scorer, report_writer=report_writer)
+    result = graph.invoke({
+        "dimensions": [_dimension("认证证据", 100).model_dump(mode="json")],
+        "branch_results": [{
+            "task_id": "SKU-1:1", "candidate_id": "SKU-1", "dimension_number": 1,
+            "execution_status": "succeeded", "requirements": [_branch_requirement("chunk-1")],
+            "tool_call_ids": ["T1"],
+        }],
+    })
+
+    assert result["status"] == "completed"
+    dimension = result["candidate_assessments"][0]["dimensions"][0]
+    assert dimension["evidence_status"] == expected_status
+    assert len(calls) == 2
