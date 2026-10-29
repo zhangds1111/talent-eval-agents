@@ -12,12 +12,14 @@ import sys
 import time
 from pathlib import Path
 
+import os
+
 import httpx
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 DATA = BACKEND_DIR / "samples" / "product" / "markdown"
-API = "http://127.0.0.1:18080/api"
+API = os.getenv("PRODUCT_API", "http://127.0.0.1:18080/api")
 HEADERS = {"X-Tenant-ID": "course-demo", "X-Permission-Scopes": "hr_private"}
 # 文件名后缀到 document_type 的映射（kind 为 SKU 材料类型）
 KIND_TO_DOC_TYPE = {
