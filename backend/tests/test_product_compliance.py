@@ -118,3 +118,14 @@ def test_ranking_puts_certification_gaps_after_and_report_renders_program_facts(
     assert [c.candidate_id for c in rank_candidate_assessments([high_but_gap, lower_clean, unknown])] == ["C", "B", "A"]
     text = "\n".join(_render_product_facts(high_but_gap.product_facts))
     assert "毛利率 **45.0%**" in text and "缺有效证据：已过期" in text
+
+
+def test_market_aliases_are_normalized_before_sql(session_factory):
+    from app.query_plan import FilterCondition, QueryPlan, TaskType, select_candidate_ids
+
+    plan = QueryPlan(task_type=TaskType.FIND_TALENT, filters=[
+        FilterCondition(field="region", operator="eq", value="US"),
+        FilterCondition(field="gross_margin_percent", operator="gte", value=40),
+    ])
+    with session_factory() as db:
+        assert select_candidate_ids(db, plan, tenant_id="course-demo") == ["SKU-CL-001", "SKU-PT-001"]

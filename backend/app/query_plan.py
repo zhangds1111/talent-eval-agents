@@ -122,9 +122,32 @@ def _age_spec(item: FilterCondition, today: date):
     return EmployeeProfile.birth_date.op(reversed_operator)(boundary)
 
 
+MARKET_ALIASES = {
+    "us": "美国", "usa": "美国", "united states": "美国", "美国站": "美国", "美区": "美国",
+    "eu": "欧盟", "europe": "欧盟", "欧洲": "欧盟", "欧洲站": "欧盟", "欧盟站": "欧盟",
+}
+
+
+def normalize_market(value: Any) -> Any:
+    if isinstance(value, list):
+        return [normalize_market(item) for item in value]
+    if isinstance(value, str):
+        return MARKET_ALIASES.get(value.strip().lower(), value.strip())
+    return value
+
+
+def _market_spec() -> FilterFieldSpec:
+    column = _column_spec(EmployeeProfile.region, "目标市场（国家或地区），使用中文名称：美国、欧盟（US/EU 等缩写会被程序归一化）", {"eq", "in"})
+
+    def build(item: FilterCondition, today: date):
+        return column.build(item.model_copy(update={"value": normalize_market(item.value)}), today)
+
+    return FilterFieldSpec(column.description, column.operators, build)
+
+
 FILTER_FIELD_REGISTRY = {
     FilterField.AGE: FilterFieldSpec("上架时长（月），由 birth_date 按查询基准日换算", frozenset({"lt", "lte", "gt", "gte"}), _age_spec),
-    FilterField.REGION: _column_spec(EmployeeProfile.region, "目标市场（国家或地区）", {"eq", "in"}),
+    FilterField.REGION: _market_spec(),
     FilterField.DEPARTMENT: _column_spec(EmployeeProfile.department, "商品品类", {"eq", "in"}),
     FilterField.JOB_LEVEL: _column_spec(EmployeeProfile.job_level, "内部等级编码，格式为 L1、L2 等", {"eq", "in"}),
     FilterField.YEARS_OF_EXPERIENCE: _column_spec(EmployeeProfile.years_of_experience, "评价数量等数值属性", {"eq", "lt", "lte", "gt", "gte"}),
