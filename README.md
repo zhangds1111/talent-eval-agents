@@ -60,9 +60,23 @@
 ### 当前阶段局限
 
 - 借用旧表承载选品数据，字段语义与键名仍为人才模式命名（如 `employee_no`、`birth_date` 表示上架时长）。
-- 无选品模板与「市场×品类→必需认证」规则表，必需认证完全依赖用户在提问中表达、由材料证据回答。
-- 价格、毛利、重量等尚未接入结构化数值列，量化的售价/毛利条件只能进入语义要求或偏好，不能做 SQL 精确过滤。
+- 无选品模板；认证登记（`product_certifications`）目前由样例 JSON 人工录入，尚未从材料自动抽取。
 - LLM 相关链路需要配置 `DASHSCOPE_API_KEY` 才能在本地真实运行。
+
+## 选品评估模式（第 2 阶段）：程序计算的毛利与认证缺口
+
+新增迁移 `database/migrations/025_product_selection.sql`（已同步到 `init.sql`），三张表：
+
+| 表 | 作用 |
+|---|---|
+| `product_attributes` | 每个 SKU 的型号、币种、目标售价、到岸成本，以及带电/无线/锂电/儿童/食品接触属性 |
+| `certification_rules` | 「市场 × 品类 × 属性 → 必需认证」规则（`market`/`category` 可为 `*`） |
+| `product_certifications` | 从商品材料登记的认证/检测文件：编号、适用型号、签发日与有效期、来源材料 |
+
+- **毛利率由 SQL 计算**：QueryPlan 新增 `target_price`、`landed_cost`、`gross_margin_percent` 三个数值过滤字段，「毛利不低于 40%」编译为 `gross_margin_percent gte 40`，在 `(售价-到岸成本)/售价` 上直接过滤；没有数值属性的 SKU 不会被价格/毛利条件放行。
+- **认证缺口由程序计算**（`backend/app/product_compliance.py`）：按 SKU 的市场、品类和属性匹配规则，逐项比对登记文件，状态为 `evidenced`（有证据）/`missing`（未提供）/`expired`（已过期）/`model_mismatch`（型号不符或未载明型号）。
+- **接入评估**：报告子图在聚合阶段加载上述结果；排名先按必需认证缺口数（少者优先，无数据不惩罚），再按已确认得分；报告每个商品新增「程序核算（非模型生成）」小节，缺口必须写入风险段。仍只表述「有证据/缺证据」。
+- 样例：`backend/samples/product/product_attributes.json`、`certification_rules.json`、`product_certifications.json`（全部虚构，规则为演示用途，不代表真实法规要求），由 `python -m scripts.seed_product_samples` 一并导入。已有库需先执行：`psql ... -f database/migrations/025_product_selection.sql`。
 
 ## 运行模式
 
