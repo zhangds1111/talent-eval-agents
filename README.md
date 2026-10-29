@@ -1,6 +1,6 @@
 # 多 Agent 人才评估与推荐系统
 
-课程贯穿项目的统一代码根目录
+课程贯穿项目的统一代码根目录。本仓库正在按选品语境改造：第 1 阶段已落地「选品评估模式」（见下文「选品评估模式」一节），原有课程文档保留人才表述作为机制说明。
 
 ## 当前目录
 
@@ -23,6 +23,46 @@
 多轮入口继续使用 `POST /api/runs`，后续请求携带同一 `conversation_id`。父图 `_begin_turn` 返回局部更新，保留消息、当前输入、完整要求和标题，仅清理运行产物。请求子图输入显式声明 `messages`、`request_text`、`talent_request`、`conversation_title`，人工澄清也作为消息返回父图。首次理解生成标题，后续模型使用不含标题字段的修订 Schema。`requirement.revised` 的 `data` 只包含 `action`、`summary`。持久化 Run 的轮次从历史记录递增，后端重启后继续原会话不会重置编号
 
 报告输出出现 Pydantic 结构校验错误时，报告写作器将校验信息交回模型纠正一次；再次失败仍上报错误，不截断证据或放宽引用校验。相关回归覆盖 `tests/test_talent_conversation.py`、`tests/test_talent_run_stream.py` 和 `tests/test_talent_evaluation_report.py`，在 `backend/` 执行 `uv run pytest -q`
+
+## 选品评估模式（第 1 阶段）
+
+本阶段把人才评估链路最小改动地切换到「跨境电商选品评估」场景：不改数据库表结构，暂借现有表与字段承载选品数据（`employee_profiles` 表存候选商品，`employee_no` → SKU 编号、`region` → 目标市场、`department` → 品类、`current_position` → 商品子类），内部键名保持不变。
+
+**本阶段不设选品模板**：需求理解阶段直接把用户自然语言需求（目标市场、渠道、品类、售价、毛利、认证偏好、评分等）编译成 `QueryPlan` 去筛选 SKU，`input_mode` 一律为 `detailed_requirement`，因此路由直接走 `build_plan`，跳过 `lookup_jobs` 与确认岗位的 interrupt（图结构未重构，人才模式的岗位确认分支与相关测试保持可用）。当筛出 0 个候选商品、或条件歧义/冲突导致查询计划不可执行时，仍会通过 interrupt 暂停，让用户修订选品条件或取消。
+
+必需认证的校验说明：**本阶段不设选品模板，也不要求系统在需求理解时推断必需认证**；各 SKU 是否有认证由证据抽取与评估维度基于材料回答（报告只写「有证据/缺证据」，不下「合规」结论）。「市场×品类 → 必需认证」的规则表将在后续阶段实现，届时再由规则驱动必需的认证维度。
+
+### 导入虚构样例
+
+- 候选商品（5 个 SKU，全部为虚构数据，含锂电池户外照明、宠物电动玩具、儿童硅胶餐具等品类）：
+  ```bash
+  cd backend
+  uv run --no-sync python -m scripts.seed_product_samples
+  ```
+- SKU 材料（报价单、检测报告/证书、详情页文案、用户评价，Markdown 格式，故意埋坑：证书过期、报告型号与商品不符、详情页声称 CE 却无报告等）：
+  ```bash
+  uv run --no-sync python scripts/import_product_markdown.py
+  ```
+  前置条件：后端 API、Postgres、Redis、MinIO、Milvus 已启动且 `.env` 配置了 `DASHSCOPE_API_KEY`（详见 `backend/samples/product/markdown/` 内标注的虚构声明）。
+
+### 示例提问
+
+- 「我要为美国 Amazon 站选一批户外照明产品（露营灯、头灯），带电产品需要提供 FCC 和 UN38.3 检测报告，样品报价毛利率不低于 40%。请基于报价单、检测报告和用户评价给出候选商品的证据、风险与推荐结论」
+- 「我想在欧洲站做儿童硅胶餐具，需要食品接触材料检测报告，样品报价毛利率不低于 35%」
+
+### 链路如何流转
+
+1. 需求理解：模型把自然语言需求编译为 `TalentRequestDraft`（硬条件进 `filters`，认证/口碑类要求进 `semantic_requirements`，偏好进 `evaluation_preferences`），随后 `build_plan` 生成 `QueryPlan`；歧义或冲突会触发澄清 interrupt。
+2. 筛选 SKU：`filter_candidates` 按 `QueryPlan.filters` 在候选商品表中精确过滤；0 结果时通过 leave-one-out 诊断定位卡死条件并 interrupt 让用户放宽。
+3. 动态维度 → 证据检索与并行评估 → 维度评分（0/3/5 锚点）→ 一致性审查 → 报告合成：各环节提示词均为选品语境，证据抽取关注证书编号、有效期、适用型号，并区分卖家声明与检测报告。
+4. 报告只表述「有证据/缺证据」及证据所示事实，不下合规结论；结论均可回溯到商品原始材料。
+
+### 当前阶段局限
+
+- 借用旧表承载选品数据，字段语义与键名仍为人才模式命名（如 `employee_no`、`birth_date` 表示上架时长）。
+- 无选品模板与「市场×品类→必需认证」规则表，必需认证完全依赖用户在提问中表达、由材料证据回答。
+- 价格、毛利、重量等尚未接入结构化数值列，量化的售价/毛利条件只能进入语义要求或偏好，不能做 SQL 精确过滤。
+- LLM 相关链路需要配置 `DASHSCOPE_API_KEY` 才能在本地真实运行。
 
 ## 运行模式
 
