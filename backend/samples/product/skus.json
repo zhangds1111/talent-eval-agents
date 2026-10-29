@@ -1,0 +1,52 @@
+[
+  {
+    "employee_no": "SKU-CL-001",
+    "tenant_id": "course-demo",
+    "name": "星野 Lumina-1 户外露营灯",
+    "region": "美国",
+    "current_position": "充电式露营灯",
+    "department": "户外照明",
+    "job_level": null,
+    "employment_status": "active"
+  },
+  {
+    "employee_no": "SKU-CL-002",
+    "tenant_id": "course-demo",
+    "name": "夜行蜂 Micro 感应头灯",
+    "region": "美国",
+    "current_position": "感应式头灯",
+    "department": "户外照明",
+    "job_level": null,
+    "employment_status": "active"
+  },
+  {
+    "employee_no": "SKU-PT-001",
+    "tenant_id": "course-demo",
+    "name": "逗逗猫智能逗猫棒",
+    "region": "美国",
+    "current_position": "宠物电动玩具",
+    "department": "宠物用品",
+    "job_level": null,
+    "employment_status": "active"
+  },
+  {
+    "employee_no": "SKU-KT-001",
+    "tenant_id": "course-demo",
+    "name": "小贝比硅胶折叠儿童餐具",
+    "region": "欧盟",
+    "current_position": "儿童硅胶餐具",
+    "department": "儿童厨房用品",
+    "job_level": null,
+    "employment_status": "active"
+  },
+  {
+    "employee_no": "SKU-AU-001",
+    "tenant_id": "other-demo",
+    "name": "山音 TrailBeat 蓝牙露营音箱",
+    "region": "欧盟",
+    "current_position": "蓝牙露营音箱",
+    "department": "户外音频",
+    "job_level": null,
+    "employment_status": "active"
+  }
+]
