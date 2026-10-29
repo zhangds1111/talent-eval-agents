@@ -35,10 +35,13 @@ type Employee = {
   age?: number;
   region?: string;
   current_position?: string;
-  job_level?: string;
-  years_of_experience?: number;
   department?: string;
   material_count: number;
+  model_no?: string | null;
+  currency?: string | null;
+  target_price?: number | null;
+  landed_cost?: number | null;
+  gross_margin_percent?: number | null;
 };
 
 type KB = {
@@ -618,7 +621,15 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...values,
-          years_of_experience: Number(values.years_of_experience) || null,
+          model_no: values.model_no || null,
+          currency: values.currency || null,
+          target_price: values.target_price ? Number(values.target_price) : null,
+          landed_cost: values.landed_cost ? Number(values.landed_cost) : null,
+          is_electrical: values.is_electrical === "on",
+          is_wireless: values.is_wireless === "on",
+          has_lithium_battery: values.has_lithium_battery === "on",
+          for_children: values.for_children === "on",
+          food_contact: values.food_contact === "on",
         }),
       });
       setEmployeeOpen(false);
@@ -853,11 +864,11 @@ function App() {
                 <div className="tr th">
                   <span>SKU</span>
                   <span>目标市场</span>
-                  <span>上架时长（月）</span>
+                  <span>型号</span>
                   <span>品类</span>
                   <span>商品子类</span>
-                  <span>等级编码</span>
-                  <span>评价数量</span>
+                  <span>售价 / 到岸成本</span>
+                  <span>毛利率</span>
                   <span>关联材料</span>
                 </div>
                 {pagedEmployees.map((item) => (
@@ -870,13 +881,17 @@ function App() {
                       </b>
                     </span>
                     <span>{item.region || "-"}</span>
-                    <span>{item.age ?? "-"}</span>
+                    <span>{item.model_no || "-"}</span>
                     <span>{item.department || "-"}</span>
                     <span>{item.current_position || "-"}</span>
                     <span>
-                      <em>{item.job_level || "-"}</em>
+                      {item.target_price != null
+                        ? `${item.target_price.toFixed(2)} / ${(item.landed_cost ?? 0).toFixed(2)} ${item.currency}`
+                        : "-"}
                     </span>
-                    <span>{item.years_of_experience ?? "-"}</span>
+                    <span>
+                      <em>{item.gross_margin_percent != null ? `${item.gross_margin_percent.toFixed(1)}%` : "-"}</em>
+                    </span>
                     <span>
                       <strong>{item.material_count} 份</strong>
                     </span>
@@ -1072,10 +1087,6 @@ function App() {
                 <input name="name" required />
               </label>
               <label>
-                上架日期
-                <input name="birth_date" type="date" />
-              </label>
-              <label>
                 目标市场
                 <input name="region" />
               </label>
@@ -1084,16 +1095,34 @@ function App() {
                 <input name="current_position" />
               </label>
               <label>
-                等级编码
-                <select name="job_level">
-                  {Array.from({ length: 10 }, (_, index) => (
-                    <option key={index + 1}>L{index + 1}</option>
-                  ))}
+                型号
+                <input name="model_no" />
+              </label>
+              <label>
+                币种
+                <select name="currency">
+                  <option value="">未填写</option>
+                  <option>USD</option>
+                  <option>EUR</option>
                 </select>
               </label>
               <label>
-                评价数量
-                <input name="years_of_experience" type="number" step="0.5" />
+                目标售价
+                <input name="target_price" type="number" step="0.01" min="0" />
+              </label>
+              <label>
+                到岸成本
+                <input name="landed_cost" type="number" step="0.01" min="0" />
+              </label>
+              <label className="wide">
+                商品属性（决定必需认证）
+                <span>
+                  <input type="checkbox" name="is_electrical" /> 带电{" "}
+                  <input type="checkbox" name="is_wireless" /> 无线{" "}
+                  <input type="checkbox" name="has_lithium_battery" /> 锂电池{" "}
+                  <input type="checkbox" name="for_children" /> 儿童用品{" "}
+                  <input type="checkbox" name="food_contact" /> 食品接触
+                </span>
               </label>
               <label className="wide">
                 品类
