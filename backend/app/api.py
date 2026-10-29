@@ -26,7 +26,9 @@ from app.model_provider import get_embedding_model
 from app.model_provider import get_chat_model
 from app.query_plan import QueryPlan, compile_query_plan, merge_query_results, search_with_optimization, select_candidate_ids
 from app.reranker import get_reranker
+from app.product_compliance import compute_unit_economics
 from app.models import (
+    ProductAttributes,
     ChunkingRun,
     Document,
     DocumentVersion,
@@ -71,6 +73,22 @@ class EmployeeInput(BaseModel):
     job_level: str | None = Field(default=None, pattern=r"^L\d+$")
     years_of_experience: float | None = None
     department: str | None = None
+    # 选品数值属性：四项同时提供时写入 product_attributes，毛利率由程序计算
+    model_no: str | None = Field(default=None, max_length=64)
+    currency: str | None = Field(default=None, max_length=8)
+    target_price: float | None = Field(default=None, gt=0)
+    landed_cost: float | None = Field(default=None, ge=0)
+    is_electrical: bool = False
+    is_wireless: bool = False
+    has_lithium_battery: bool = False
+    for_children: bool = False
+    food_contact: bool = False
+
+
+PRODUCT_ATTRIBUTE_INPUTS = (
+    "model_no", "currency", "target_price", "landed_cost", "is_electrical",
+    "is_wireless", "has_lithium_battery", "for_children", "food_contact",
+)
 
 
 class KnowledgeBaseInput(BaseModel):
@@ -120,12 +138,20 @@ class DeleteDocumentsInput(BaseModel):
     document_ids: list[UUID] = Field(min_length=1, max_length=100)
 
 
-def employee_json(item: EmployeeProfile, material_count: int = 0):
+def product_attributes_json(attrs: ProductAttributes | None) -> dict:
+    if attrs is None:
+        return {"model_no": None, "currency": None, "target_price": None, "landed_cost": None, "gross_margin_percent": None}
+    economics = compute_unit_economics(currency=attrs.currency, target_price=float(attrs.target_price), landed_cost=float(attrs.landed_cost))
+    return {"model_no": attrs.model_no, "currency": attrs.currency, "target_price": economics.target_price,
+            "landed_cost": economics.landed_cost, "gross_margin_percent": economics.gross_margin_percent}
+
+
+def employee_json(item: EmployeeProfile, material_count: int = 0, attrs: ProductAttributes | None = None):
     today = date.today()
     age = None
     if item.birth_date:
         age = today.year - item.birth_date.year - ((today.month, today.day) < (item.birth_date.month, item.birth_date.day))
-    return {"id": item.id, "employee_no": item.employee_no, "name": item.name, "gender": item.gender, "birth_date": item.birth_date, "age": age, "region": item.region, "current_position": item.current_position, "job_level": item.job_level, "years_of_experience": item.years_of_experience, "department": item.department, "employment_status": item.employment_status, "material_count": material_count}
+    return {"id": item.id, "employee_no": item.employee_no, "name": item.name, "gender": item.gender, "birth_date": item.birth_date, "age": age, "region": item.region, "current_position": item.current_position, "job_level": item.job_level, "years_of_experience": item.years_of_experience, "department": item.department, "employment_status": item.employment_status, "material_count": material_count, **product_attributes_json(attrs)}
 
 
 def latest_parse_job(db: Session, version_id: UUID | None) -> ParseJob | None:
@@ -217,19 +243,30 @@ def evidence_item_json(item, version_by_id, document_by_id, employee_by_id, *, s
 @router.get("/employees")
 def list_employees(db: Session = Depends(get_db)):
     counts = dict(db.execute(select(Document.employee_id, func.count(Document.id)).where(Document.employee_id.is_not(None)).group_by(Document.employee_id)).all())
-    return [employee_json(item, counts.get(item.id, 0)) for item in db.scalars(select(EmployeeProfile).order_by(EmployeeProfile.employee_no)).all()]
+    attrs = {item.product_id: item for item in db.scalars(select(ProductAttributes)).all()}
+    return [employee_json(item, counts.get(item.id, 0), attrs.get(item.id)) for item in db.scalars(select(EmployeeProfile).order_by(EmployeeProfile.employee_no)).all()]
 
 
 @router.post("/employees", status_code=201)
 def create_employee(payload: EmployeeInput, db: Session = Depends(get_db)):
     if db.scalar(select(EmployeeProfile).where(EmployeeProfile.employee_no == payload.employee_no)):
-        raise HTTPException(409, "员工工号已存在")
-    item = EmployeeProfile(**payload.model_dump())
+        raise HTTPException(409, "SKU 编号已存在")
+    values = payload.model_dump()
+    attribute_values = {key: values.pop(key) for key in PRODUCT_ATTRIBUTE_INPUTS}
+    numeric = [attribute_values[key] for key in ("model_no", "currency", "target_price", "landed_cost")]
+    if any(value is not None for value in numeric) and not all(value is not None for value in numeric):
+        raise HTTPException(422, "型号、币种、售价、到岸成本需同时填写")
+    item = EmployeeProfile(**values)
     db.add(item)
+    db.flush()
+    attrs = None
+    if all(value is not None for value in numeric):
+        attrs = ProductAttributes(product_id=item.id, **attribute_values)
+        db.add(attrs)
     db.commit()
     db.refresh(item)
     logger.info("employee_created employee_id=%s employee_no=%s name=%s", item.id, item.employee_no, item.name)
-    return employee_json(item)
+    return employee_json(item, 0, attrs)
 
 
 @router.get("/knowledge-bases")
