@@ -2,7 +2,7 @@ from datetime import date, datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, Enum, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, Numeric, Date, DateTime, Enum, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -60,6 +60,54 @@ class EmployeeProfile(Base):
     employment_status: Mapped[str] = mapped_column(String(32), default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class ProductAttributes(Base):
+    """选品数值与属性（第 2 阶段）：毛利由程序按 target_price/landed_cost 计算。"""
+
+    __tablename__ = "product_attributes"
+
+    product_id: Mapped[UUID] = mapped_column(ForeignKey("employee_profiles.id", ondelete="CASCADE"), primary_key=True)
+    model_no: Mapped[str] = mapped_column(String(64))
+    currency: Mapped[str] = mapped_column(String(8))
+    target_price: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False))
+    landed_cost: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False))
+    is_electrical: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_wireless: Mapped[bool] = mapped_column(Boolean, default=False)
+    has_lithium_battery: Mapped[bool] = mapped_column(Boolean, default=False)
+    for_children: Mapped[bool] = mapped_column(Boolean, default=False)
+    food_contact: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class CertificationRule(Base):
+    """市场 × 品类 × 商品属性 → 必需认证。category='*' 表示任意品类。"""
+
+    __tablename__ = "certification_rules"
+    __table_args__ = (UniqueConstraint("market", "category", "applies_when", "certification"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    market: Mapped[str] = mapped_column(String(64))
+    category: Mapped[str] = mapped_column(String(255), default="*")
+    applies_when: Mapped[str] = mapped_column(String(32))
+    certification: Mapped[str] = mapped_column(String(64))
+    rationale: Mapped[str] = mapped_column(Text)
+
+
+class ProductCertification(Base):
+    """从商品材料登记的认证/检测文件（登记≠核验，报告只写有/缺证据）。"""
+
+    __tablename__ = "product_certifications"
+    __table_args__ = (UniqueConstraint("product_id", "certification", "document_no"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    product_id: Mapped[UUID] = mapped_column(ForeignKey("employee_profiles.id", ondelete="CASCADE"))
+    certification: Mapped[str] = mapped_column(String(64))
+    document_no: Mapped[str] = mapped_column(String(128))
+    applicable_model: Mapped[str | None] = mapped_column(String(64))
+    issued_on: Mapped[date | None] = mapped_column(Date)
+    valid_until: Mapped[date | None] = mapped_column(Date)
+    source_material: Mapped[str] = mapped_column(String(255))
 
 
 class JobDescription(Base):

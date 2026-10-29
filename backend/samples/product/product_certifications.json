@@ -1,0 +1,9 @@
+[
+  {"sku": "SKU-CL-001", "certification": "UN38.3", "document_no": "FICT-UN38-2021-1102", "applicable_model": null, "issued_on": "2021-11-02", "valid_until": "2024-06-30", "source_material": "SKU-CL-001_certificate.md"},
+  {"sku": "SKU-CL-001", "certification": "FCC Part 15", "document_no": "FICT-EMC-2023-0418", "applicable_model": "CL-100", "issued_on": "2023-03-28", "valid_until": null, "source_material": "SKU-CL-001_test_report.md"},
+  {"sku": "SKU-CL-002", "certification": "UN38.3", "document_no": "FICT-UN38-2025-0719", "applicable_model": "HB-2", "issued_on": "2025-07-19", "valid_until": "2028-07-18", "source_material": "SKU-CL-002_test_report.md"},
+  {"sku": "SKU-PT-001", "certification": "UN38.3", "document_no": "FICT-UN38-2025-0309", "applicable_model": "PT-201", "issued_on": "2025-03-09", "valid_until": "2028-03-08", "source_material": "SKU-PT-001_certificate.md"},
+  {"sku": "SKU-PT-001", "certification": "ASTM F963", "document_no": "FICT-SAFE-2024-0921", "applicable_model": "PT-200", "issued_on": "2024-09-28", "valid_until": null, "source_material": "SKU-PT-001_test_report.md"},
+  {"sku": "SKU-AU-001", "certification": "CE-RED", "document_no": "FICT-RED-2025-1160", "applicable_model": "TB-5", "issued_on": "2025-10-15", "valid_until": null, "source_material": "SKU-AU-001_test_report.md"},
+  {"sku": "SKU-AU-001", "certification": "UN38.3", "document_no": "FICT-UN38-2025-0882", "applicable_model": "TB-5", "issued_on": "2025-08-12", "valid_until": "2028-08-11", "source_material": "SKU-AU-001_certificate.md"}
+]

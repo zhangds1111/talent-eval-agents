@@ -1,0 +1,7 @@
+[
+  {"sku": "SKU-CL-001", "model_no": "CL-101", "currency": "USD", "target_price": 19.99, "landed_cost": 11.20, "is_electrical": true, "is_wireless": false, "has_lithium_battery": true, "for_children": false, "food_contact": false},
+  {"sku": "SKU-CL-002", "model_no": "HB-2", "currency": "USD", "target_price": 12.99, "landed_cost": 8.60, "is_electrical": true, "is_wireless": false, "has_lithium_battery": true, "for_children": false, "food_contact": false},
+  {"sku": "SKU-PT-001", "model_no": "PT-201", "currency": "USD", "target_price": 15.99, "landed_cost": 8.90, "is_electrical": true, "is_wireless": false, "has_lithium_battery": true, "for_children": false, "food_contact": false},
+  {"sku": "SKU-KT-001", "model_no": "KT-01", "currency": "EUR", "target_price": 14.99, "landed_cost": 8.40, "is_electrical": false, "is_wireless": false, "has_lithium_battery": false, "for_children": true, "food_contact": true},
+  {"sku": "SKU-AU-001", "model_no": "TB-5", "currency": "EUR", "target_price": 29.99, "landed_cost": 16.50, "is_electrical": true, "is_wireless": true, "has_lithium_battery": true, "for_children": false, "food_contact": false}
+]

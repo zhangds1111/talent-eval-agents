@@ -1,0 +1,8 @@
+[
+  {"market": "美国", "category": "*", "applies_when": "electrical", "certification": "FCC Part 15", "rationale": "美国市场带电子电路的产品需提供 FCC Part 15 EMC 检测报告（演示规则）"},
+  {"market": "美国", "category": "*", "applies_when": "children", "certification": "CPSIA", "rationale": "美国儿童产品需 CPSIA 检测与 CPC（演示规则）"},
+  {"market": "*", "category": "*", "applies_when": "lithium_battery", "certification": "UN38.3", "rationale": "含锂电池产品运输需 UN38.3 测试摘要（演示规则）"},
+  {"market": "欧盟", "category": "*", "applies_when": "wireless", "certification": "CE-RED", "rationale": "欧盟无线设备需 RED 指令符合性检测（演示规则）"},
+  {"market": "欧盟", "category": "*", "applies_when": "food_contact", "certification": "EU 1935/2004", "rationale": "欧盟食品接触材料需符合 (EC) 1935/2004 并提供迁移检测报告（演示规则）"},
+  {"market": "欧盟", "category": "儿童厨房用品", "applies_when": "children", "certification": "EN 14372", "rationale": "欧盟儿童餐具需 EN 14372 检测（演示规则）"}
+]
