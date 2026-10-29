@@ -129,7 +129,7 @@ function stepStatusLabel(step: RunStep): string {
 }
 
 export function TalentChatPage({ apiBase, sidebarCollapsed, onToggleSidebar, onOpenDashboard, onOpenRecords, onOpenEvaluation }: Props) {
-  const [message, setMessage] = useState("我们正在为上海研发团队招聘一名高级 AI 应用工程师，要求至少 5 年后端或 AI 应用开发经验，并做过企业知识库和 Agent 评测项目。请基于现有简历给出候选人证据、风险和推荐结论");
+  const [message, setMessage] = useState("我要为美国 Amazon 站选一批户外照明产品（露营灯、头灯），带电产品需要提供 FCC 和 UN38.3 检测报告，样品报价毛利率不低于 40%。请基于报价单、检测报告和用户评价给出候选商品的证据、风险与推荐结论");
   const [view, setView] = useState<RunView>(initialRunView);
   const [revision, setRevision] = useState("");
   const [busy, setBusy] = useState(false);
@@ -276,11 +276,11 @@ export function TalentChatPage({ apiBase, sidebarCollapsed, onToggleSidebar, onO
       <aside className="side">
         <div className="brand">
           <img src="/talentos-favicon.png" alt="TalentOS" />
-          <div><b>智鉴 TalentOS</b><small>多 AGENT 人才决策平台</small></div>
+          <div><b>智鉴 TalentOS</b><small>多 AGENT 选品评估平台</small></div>
         </div>
         <nav>
           <button onClick={onOpenDashboard}><LayoutGrid /><span>工作台</span></button>
-          <button onClick={onOpenRecords}><UserSquare2 /><span>人才档案</span></button>
+          <button onClick={onOpenRecords}><UserSquare2 /><span>商品档案</span></button>
           <button className="active"><Sparkles /><span>评估与推荐</span></button>
           <button onClick={onOpenEvaluation}><FlaskConical /><span>评测中心</span></button>
         </nav>
@@ -291,7 +291,7 @@ export function TalentChatPage({ apiBase, sidebarCollapsed, onToggleSidebar, onO
       </aside>
       <main>
         <header>
-          <div><span>评估与推荐</span><ChevronRight /><b>人才决策助手</b></div>
+          <div><span>评估与推荐</span><ChevronRight /><b>选品决策助手</b></div>
           <div className="currentUser"><b>Will</b><span>W</span></div>
         </header>
         <section className="chatWorkspace">
@@ -301,12 +301,12 @@ export function TalentChatPage({ apiBase, sidebarCollapsed, onToggleSidebar, onO
             <div className="conversationGroup"><small>会话列表</small>{history.map((item) => <button key={item.conversation_id} className={view.conversationId === item.conversation_id ? "active" : ""} onClick={() => void openHistory(item.latest_run_id)} title={item.title}>{item.title}<span>{runStatusLabel(item.status)} · {new Date(item.updated_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span></button>)}{history.length === 0 && <p className="emptyHistory">暂无对话记录</p>}</div>
           </aside>
           <div className="chatPanel">
-            <div className="chatHero"><div><span className="assistantMark"><Sparkles /></span><div><h1>人才决策助手</h1><p>输入人才要求或岗位名称，系统将实时展示理解、检索、评估与报告过程</p></div></div>
+            <div className="chatHero"><div><span className="assistantMark"><Sparkles /></span><div><h1>选品决策助手</h1><p>输入选品需求（目标市场、品类、售价、毛利、认证偏好等），系统将实时展示理解、检索、评估与报告过程</p></div></div>
               <span className={`connection ${connection}`}><i />{connection === "connected" ? "实时连接" : connection === "reconnecting" ? "正在重连" : "就绪"}</span>
             </div>
 
             <div className="chatScroll">
-              {view.status === "idle" && <div className="starterCards"><button onClick={() => setMessage("我们准备启动 AI 应用工程师岗位的招聘，请先从系统中的岗位 JD 里找到对应岗位，再基于岗位要求评估现有候选人，并给出证据、风险和录用建议")}><b>按岗位评估</b><span>完整招聘意图与岗位确认</span></button><button onClick={() => setMessage("我们正在为上海研发团队招聘一名高级 AI 应用工程师，要求至少 5 年后端或 AI 应用开发经验，并做过企业知识库和 Agent 评测项目。请基于现有简历给出候选人证据、风险和推荐结论")}><b>按条件检索</b><span>地区、年限、项目与能力</span></button></div>}
+              {view.status === "idle" && <div className="starterCards"><button onClick={() => setMessage("我要为美国 Amazon 站选一批户外照明产品（露营灯、头灯），带电产品需要提供 FCC 和 UN38.3 检测报告，样品报价毛利率不低于 40%。请基于报价单、检测报告和用户评价给出候选商品的证据、风险和推荐结论")}><b>按选品需求评估</b><span>目标市场、品类、认证与毛利要求</span></button><button onClick={() => setMessage("我想在欧洲站做儿童硅胶餐具，需要食品接触材料检测报告，样品报价毛利率不低于 35%。请基于现有材料给出候选商品的证据、风险和推荐结论")}><b>按条件检索</b><span>市场、品类、价格与口碑</span></button></div>}
               {view.conversationTurns.map((turn) => {
                 const isCurrent = turn.runId === view.runId;
                 const status = isCurrent ? view.status : turn.status;
@@ -328,9 +328,9 @@ export function TalentChatPage({ apiBase, sidebarCollapsed, onToggleSidebar, onO
                     </button>
                     {expanded && <div className="turnAnswerBody">
                       {revisionSummary && <section className="resolvedRequest"><div><b>要求修订已识别</b><span>{revisionAction === "add" ? "增加要求" : revisionAction === "update" ? "修改要求" : "删除要求"}</span></div><p>{revisionSummary}</p></section>}
-                      {steps.length > 0 && <section className="runTimeline"><div className="timelineHead"><div><Sparkles /><b>{status === "completed" ? "人才评估执行完成" : status === "cancelled" ? "人才评估已取消" : status === "waiting_input" ? "人才评估等待确认" : "正在执行人才评估"}</b></div><code>{turn.runId.slice(0, 8)}</code></div>{steps.map((step) => <button type="button" className={`timelineStep ${step.status}${activeStep === step ? " selected" : ""}`} key={step.stepId} onClick={() => {setActiveStep(step);setActiveStepRun(turn.runId);}}><span><StepStatusIcon step={step} /></span><div><b>{step.title}</b>{step.summary && <p>{step.summary}</p>}{step.total !== undefined && <div className="progressTrack"><i style={{ width: `${step.total ? ((step.completed || 0) / step.total) * 100 : 0}%` }} /></div>}</div><small><em>{stepStatusLabel(step)}</em><time>{formatDuration(step.durationMs)}</time></small></button>)}</section>}
+                      {steps.length > 0 && <section className="runTimeline"><div className="timelineHead"><div><Sparkles /><b>{status === "completed" ? "选品评估执行完成" : status === "cancelled" ? "选品评估已取消" : status === "waiting_input" ? "选品评估等待确认" : "正在执行选品评估"}</b></div><code>{turn.runId.slice(0, 8)}</code></div>{steps.map((step) => <button type="button" className={`timelineStep ${step.status}${activeStep === step ? " selected" : ""}`} key={step.stepId} onClick={() => {setActiveStep(step);setActiveStepRun(turn.runId);}}><span><StepStatusIcon step={step} /></span><div><b>{step.title}</b>{step.summary && <p>{step.summary}</p>}{step.total !== undefined && <div className="progressTrack"><i style={{ width: `${step.total ? ((step.completed || 0) / step.total) * 100 : 0}%` }} /></div>}</div><small><em>{stepStatusLabel(step)}</em><time>{formatDuration(step.durationMs)}</time></small></button>)}</section>}
                       {isCurrent && view.interrupt && <section className="hitlCard"><div className="hitlIcon"><Clock3 /></div><div><h3>{view.interrupt.title}</h3><p>{view.interrupt.description}</p>{view.interrupt.input_kind === "text" ? <div className="hitlRevision"><textarea value={revision} onChange={(event) => setRevision(event.target.value)} /><button disabled={!revision.trim()} onClick={() => void resume(revision)}>提交修订并继续</button></div> : <div className="hitlOptions">{view.interrupt.options.map((option) => <button key={option.value} onClick={() => void resume(option.value)}>{option.label}</button>)}</div>}</div></section>}
-                      {report && <section className="reportCard"><div className="reportHead"><div><Check /><span><b>评估完成</b><small>结论均可回溯到人才原始材料</small></span></div><button className="traceButton">Run · {traceId.slice(0, 8)}</button></div><MarkdownReport text={report} onCitation={(ref) => setActiveCitation(citations.find((item) => item.ref === ref) || null)} /><FeedbackButton apiBase={apiBase} runId={turn.runId} /></section>}
+                      {report && <section className="reportCard"><div className="reportHead"><div><Check /><span><b>评估完成</b><small>结论均可回溯到商品原始材料</small></span></div><button className="traceButton">Run · {traceId.slice(0, 8)}</button></div><MarkdownReport text={report} onCitation={(ref) => setActiveCitation(citations.find((item) => item.ref === ref) || null)} /><FeedbackButton apiBase={apiBase} runId={turn.runId} /></section>}
                       {status === "cancelled" && <div className="runNotice">运行已取消，已产生的事件保留在当前页面</div>}
                       {error && <div className="runNotice error">{error}</div>}
                     </div>}
@@ -339,7 +339,7 @@ export function TalentChatPage({ apiBase, sidebarCollapsed, onToggleSidebar, onO
               })}
             </div>
 
-            <div className={`composer${composerLocked ? " locked" : ""}`}><textarea value={composerLocked ? "" : message} disabled={composerLocked} onChange={(event) => setMessage(event.target.value)} placeholder={composerLocked ? "当前运行处理中" : view.conversationId ? "继续增加、修改或删除人才要求" : "输入人才要求或岗位名称"} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !composerLocked) { event.preventDefault(); void startRun(); } }} /><div><span>{composerLocked ? "当前候选人评估期间禁止编辑" : view.conversationId ? "沿用当前会话 · Enter 发送" : "Enter 发送 · Shift + Enter 换行"}</span>{composerPolicy.showCancel && view.runId ? <button className="cancelRun" onClick={() => void cancel()}><CircleStop />取消运行</button> : busy ? <button className="reconnectRun" disabled><LoaderCircle className="spin" />创建运行</button> : <button className="sendRun" disabled={!message.trim()} onClick={() => void startRun()}><Send />{view.conversationId ? "提交修订" : "开始评估"}</button>}</div></div>
+            <div className={`composer${composerLocked ? " locked" : ""}`}><textarea value={composerLocked ? "" : message} disabled={composerLocked} onChange={(event) => setMessage(event.target.value)} placeholder={composerLocked ? "当前运行处理中" : view.conversationId ? "继续增加、修改或删除选品条件" : "输入选品需求（市场、品类、售价、毛利、认证偏好）"} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !composerLocked) { event.preventDefault(); void startRun(); } }} /><div><span>{composerLocked ? "当前商品评估期间禁止编辑" : view.conversationId ? "沿用当前会话 · Enter 发送" : "Enter 发送 · Shift + Enter 换行"}</span>{composerPolicy.showCancel && view.runId ? <button className="cancelRun" onClick={() => void cancel()}><CircleStop />取消运行</button> : busy ? <button className="reconnectRun" disabled><LoaderCircle className="spin" />创建运行</button> : <button className="sendRun" disabled={!message.trim()} onClick={() => void startRun()}><Send />{view.conversationId ? "提交修订" : "开始评估"}</button>}</div></div>
           </div>
         </section>
       </main>

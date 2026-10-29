@@ -12,7 +12,7 @@ type Metrics = {
 };
 
 const cards = [
-  ['employee_count','员工数量',UsersRound],
+  ['employee_count','商品数量',UsersRound],
   ['document_count','档案数量',Archive],
   ['conversation_count','总评估会话数',MessagesSquare],
   ['run_count','总评估轮次数',Sparkles],
@@ -32,11 +32,11 @@ export function Dashboard({apiBase,sidebarCollapsed,onToggleSidebar,onRecords,on
     return()=>{active=false;};
   },[apiBase]);
   return <div className={`app dashboardApp${sidebarCollapsed?' sidebarCollapsed':''}`}>
-    <aside className="side"><div className="brand"><img src="/talentos-favicon.png" alt="TalentOS"/><div><b>智鉴 TalentOS</b><small>多 AGENT 人才决策平台</small></div></div><nav>
-      <button className="active"><LayoutGrid/><span>工作台</span></button><button onClick={onRecords}><UserSquare2/><span>人才档案</span></button><button onClick={onChat}><Sparkles/><span>评估与推荐</span></button><button onClick={onEvaluation}><FlaskConical/><span>评测中心</span></button>
+    <aside className="side"><div className="brand"><img src="/talentos-favicon.png" alt="TalentOS"/><div><b>智鉴 TalentOS</b><small>多 AGENT 选品评估平台</small></div></div><nav>
+      <button className="active"><LayoutGrid/><span>工作台</span></button><button onClick={onRecords}><UserSquare2/><span>商品档案</span></button><button onClick={onChat}><Sparkles/><span>评估与推荐</span></button><button onClick={onEvaluation}><FlaskConical/><span>评测中心</span></button>
     </nav><div className="env"><div><i/><b>测试环境</b></div><small>服务正常 · V1.0</small></div><button type="button" className="sideToggle" onClick={onToggleSidebar} aria-label={sidebarCollapsed?'展开导航栏':'收起导航栏'} aria-expanded={!sidebarCollapsed}>{sidebarCollapsed?<ChevronRight/>:<ChevronLeft/>}</button></aside>
     <main><header><div><span>工作台</span><ChevronRight/><b>核心指标</b></div><div className="currentUser"><b>Will</b><span>W</span></div></header>
-      <section className="dashboardContent"><div className="dashboardHeading"><div><h1>核心指标</h1><p>人才数据、评估运行与评测资产概览</p></div><FileCheck2/></div>
+      <section className="dashboardContent"><div className="dashboardHeading"><div><h1>核心指标</h1><p>商品数据、评估运行与评测资产概览</p></div><FileCheck2/></div>
         {error&&<p role="alert" className="dashboardError">{error}</p>}
         <div className="dashboardMetrics">{cards.map(([key,label,Icon])=><article key={key}><span><Icon/></span><div><small>{label}</small><strong>{metrics?metrics[key]:'—'}</strong></div></article>)}</div>
       </section></main>

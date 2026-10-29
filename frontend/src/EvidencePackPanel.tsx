@@ -20,7 +20,7 @@ const statusLabels: Record<string, string> = { sufficient: '材料支持当前�
 const answerLabels: Record<string, string> = { yes: '支持', no: '反向' };
 
 export function EvidencePackPanel({ api, tenant }: { api: string; tenant: string }) {
-  const [query, setQuery] = useState('筛选在上海且有企业知识库和大模型应用项目经验的候选人');
+  const [query, setQuery] = useState('筛选美国市场户外照明品类且具备 FCC 检测报告的候选商品');
   const [packs, setPacks] = useState<Pack[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -39,7 +39,7 @@ export function EvidencePackPanel({ api, tenant }: { api: string; tenant: string
     try {
       const data = await read('/talent-search', { method: 'POST', body: JSON.stringify({ query, include_evidence_pack: true, limit: 8 }) });
       setPacks(data.evidence_packs);
-      if (!data.candidate_ids.length) setMessage('当前结构化条件下没有候选人');
+      if (!data.candidate_ids.length) setMessage('当前结构化条件下没有候选商品');
       else if (data.evidence_status === 'not_requested') setMessage('查询未包含需要材料取证的要求');
     } catch (e) { setError(e instanceof Error ? e.message : '检索失败'); }
     finally { setBusy(false); }
@@ -53,9 +53,9 @@ export function EvidencePackPanel({ api, tenant }: { api: string; tenant: string
     finally { setCitationBusy(false); }
   }
   return <details className="evidencePackPanel">
-    <summary>人才证据整理与原文核查</summary>
+    <summary>商品证据整理与原文核查</summary>
     <div className="recallHead">
-      <input aria-label="人才查询" value={query} onChange={e => setQuery(e.target.value)} style={{ flex: 1 }} />
+      <input aria-label="商品查询" value={query} onChange={e => setQuery(e.target.value)} style={{ flex: 1 }} />
       <button className="ghost" disabled={busy || !query.trim()} onClick={search}>{busy ? '整理中…' : '检索并整理证据'}</button>
     </div>
     {error && <p role="alert" className="chunkError">{error}</p>}

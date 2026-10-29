@@ -159,15 +159,15 @@ type EvidenceHit = {
 };
 
 const types: Record<string, string> = {
-  resume: "个人简历",
-  interview: "面试记录",
-  project: "项目成果",
-  certificate: "能力证明",
-  hris: "HRIS 数据",
-  performance: "绩效记录",
-  performance_review: "绩效记录",
-  review: "述职报告",
-  promotion: "晋升材料",
+  resume: "商品详情页",
+  interview: "用户评价",
+  project: "参数宣称",
+  certificate: "检测证书",
+  hris: "平台数据",
+  performance: "质检记录",
+  performance_review: "质检记录",
+  review: "复盘报告",
+  promotion: "补充材料",
 };
 
 const pipelineLabels: Record<string, string> = {
@@ -440,7 +440,7 @@ function RecallLab({
       <div className="recallHead">
         <div>
           <h3>证据召回测试</h3>
-          <p>直接验证向量检索结果，查看匹配分数、来源材料、候选人和过滤条件的作用。</p>
+          <p>直接验证向量检索结果，查看匹配分数、来源材料、候选商品和过滤条件的作用。</p>
         </div>
         <button className="ghost" onClick={searchEvidence} disabled={busy}>
           <FileSearch />
@@ -453,9 +453,9 @@ function RecallLab({
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="例如：负责推荐系统升级并带来显著收益" />
         </label>
         <label>
-          候选人
+          候选商品
           <select value={candidateId} onChange={(event) => setCandidateId(event.target.value)}>
-            <option value="">全部候选人</option>
+            <option value="">全部候选商品</option>
             {employees.map((item) => (
               <option value={item.employee_no} key={item.id}>
                 {item.name} · {item.employee_no}
@@ -623,7 +623,7 @@ function App() {
       });
       setEmployeeOpen(false);
       await load();
-      setNotice("员工已保存");
+      setNotice("商品已保存");
     } finally {
       setBusy(false);
     }
@@ -747,7 +747,7 @@ function App() {
           <img src="/talentos-favicon.png" alt="TalentOS" />
           <div>
             <b>智鉴 TalentOS</b>
-            <small>多 AGENT 人才决策平台</small>
+            <small>多 AGENT 选品评估平台</small>
           </div>
         </div>
         <nav>
@@ -757,7 +757,7 @@ function App() {
           </button>
           <button className="active">
             <UserSquare2 />
-            <span>人才档案</span>
+            <span>商品档案</span>
           </button>
           <button onClick={() => setProductSection("chat")}>
             <Sparkles />
@@ -788,9 +788,9 @@ function App() {
       <main>
         <header>
           <div>
-            <span>人才档案</span>
+            <span>商品档案</span>
             <ChevronRight />
-            <b>{page === "roster" ? "员工花名册" : "档案资料库"}</b>
+            <b>{page === "roster" ? "SKU 目录" : "材料资料库"}</b>
           </div>
           <div className="currentUser">
             <b>Will</b>
@@ -807,7 +807,7 @@ function App() {
                 setRosterPage(1);
               }}
             >
-              员工花名册
+            SKU 目录
             </button>
             <button
               className={page === "library" ? "active" : ""}
@@ -817,7 +817,7 @@ function App() {
                 setDocPage(1);
               }}
             >
-              档案资料库
+              材料资料库
             </button>
           </div>
 
@@ -825,13 +825,13 @@ function App() {
             <>
               <div className="pageHead">
                 <div>
-                  <h1>员工花名册</h1>
-                  <p>维护结构化员工信息，并查看每名员工关联的档案材料</p>
+                  <h1>SKU 目录</h1>
+                  <p>维护结构化商品信息，并查看每个 SKU 关联的档案材料</p>
                 </div>
                 <div className="actions">
                   <button className="primary" onClick={() => setEmployeeOpen(true)}>
                     <Plus />
-                    新建员工
+                    新建商品
                   </button>
                 </div>
               </div>
@@ -844,21 +844,20 @@ function App() {
                       setQuery(event.target.value);
                       setRosterPage(1);
                     }}
-                    placeholder="搜索工号、姓名、岗位或部门"
+                    placeholder="搜索 SKU 编号、名称、子类或品类"
                   />
                 </label>
-                <span>{filteredEmployees.length} 名员工</span>
+                <span>{filteredEmployees.length} 个 SKU</span>
               </div>
               <div className="table roster">
                 <div className="tr th">
-                  <span>员工</span>
-                  <span>性别</span>
-                  <span>年龄</span>
-                  <span>地区</span>
-                  <span>当前岗位</span>
-                  <span>职级</span>
-                  <span>工作年限</span>
-                  <span>所属部门</span>
+                  <span>SKU</span>
+                  <span>目标市场</span>
+                  <span>上架时长（月）</span>
+                  <span>品类</span>
+                  <span>商品子类</span>
+                  <span>等级编码</span>
+                  <span>评价数量</span>
                   <span>关联材料</span>
                 </div>
                 {pagedEmployees.map((item) => (
@@ -870,15 +869,14 @@ function App() {
                         <small>{item.employee_no}</small>
                       </b>
                     </span>
-                    <span>{item.gender || "-"}</span>
-                    <span>{item.age ?? "-"}</span>
                     <span>{item.region || "-"}</span>
+                    <span>{item.age ?? "-"}</span>
+                    <span>{item.department || "-"}</span>
                     <span>{item.current_position || "-"}</span>
                     <span>
                       <em>{item.job_level || "-"}</em>
                     </span>
-                    <span>{item.years_of_experience ?? "-"} 年</span>
-                    <span>{item.department || "-"}</span>
+                    <span>{item.years_of_experience ?? "-"}</span>
                     <span>
                       <strong>{item.material_count} 份</strong>
                     </span>
@@ -891,7 +889,7 @@ function App() {
             <>
               <div className="pageHead libraryHead">
                 <div>
-                  <h1>档案资料库</h1>
+                  <h1>材料资料库</h1>
                   <div className="librarySubtitle">
                     <p>上传后自动完成解析、切片和证据索引，并支持直接做召回实验。</p>
                     <label>
@@ -981,7 +979,7 @@ function App() {
                         setQuery(event.target.value);
                         setDocPage(1);
                       }}
-                      placeholder="搜索文件名、材料编号或员工"
+                      placeholder="搜索文件名、材料编号或 SKU"
                     />
                   </label>
                   <label className="filterSelect">
@@ -1006,7 +1004,7 @@ function App() {
                       <input type="checkbox" checked={allVisibleSelected} onChange={(event) => togglePageSelection(event.target.checked)} />
                     </span>
                     <span>文件</span>
-                    <span>员工</span>
+                    <span>SKU</span>
                     <span>材料类型</span>
                     <span>处理状态</span>
                     <span>更新时间</span>
@@ -1063,37 +1061,30 @@ function App() {
             <button type="button" className="close" onClick={() => setEmployeeOpen(false)}>
               <X />
             </button>
-            <h2>新建员工</h2>
+            <h2>新建商品</h2>
             <div className="formGrid">
               <label>
-                员工工号
+                SKU 编号
                 <input name="employee_no" required />
               </label>
               <label>
-                姓名
+                商品名称
                 <input name="name" required />
               </label>
               <label>
-                性别
-                <select name="gender">
-                  <option>女</option>
-                  <option>男</option>
-                </select>
-              </label>
-              <label>
-                出生日期
+                上架日期
                 <input name="birth_date" type="date" />
               </label>
               <label>
-                所在地区
+                目标市场
                 <input name="region" />
               </label>
               <label>
-                当前岗位
+                商品子类
                 <input name="current_position" />
               </label>
               <label>
-                当前职级
+                等级编码
                 <select name="job_level">
                   {Array.from({ length: 10 }, (_, index) => (
                     <option key={index + 1}>L{index + 1}</option>
@@ -1101,16 +1092,16 @@ function App() {
                 </select>
               </label>
               <label>
-                工作年限
+                评价数量
                 <input name="years_of_experience" type="number" step="0.5" />
               </label>
               <label className="wide">
-                所属部门
+                品类
                 <input name="department" />
               </label>
             </div>
             <button className="primary" disabled={busy}>
-              保存员工
+              保存商品
             </button>
           </form>
         </div>
@@ -1126,7 +1117,7 @@ function App() {
             <p className="dialogHint">知识库用于组织不同范围的档案材料，创建后可直接上传文件。</p>
             <label>
               知识库名称
-              <input name="name" placeholder="例如：研发中心人才档案" required autoFocus />
+              <input name="name" placeholder="例如：美国站户外照明选品材料" required autoFocus />
             </label>
             <label>
               知识库描述
@@ -1166,7 +1157,7 @@ function App() {
             </label>
             <div className="formGrid">
               <label>
-                关联员工
+                关联 SKU
                 <select name="employee_id">
                   {employees.map((item) => (
                     <option value={item.id} key={item.id}>
@@ -1314,7 +1305,7 @@ function App() {
                     <dd>{selected.material_no}</dd>
                   </div>
                   <div>
-                    <dt>关联员工</dt>
+                    <dt>关联 SKU</dt>
                     <dd>
                       {selected.employee?.name} · {selected.employee?.employee_no}
                     </dd>
