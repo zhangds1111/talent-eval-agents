@@ -34,7 +34,7 @@ def create_app(*, talent_run_manager: TalentRunManager | None = None) -> FastAPI
         finally:
             await manager.shutdown()
 
-    app = FastAPI(title="人才文档解析 API", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="选品材料解析 API", version="0.1.0", lifespan=lifespan)
     app.state.talent_run_manager = manager
     app.add_middleware(
         CORSMiddleware,

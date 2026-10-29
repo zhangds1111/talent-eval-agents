@@ -131,15 +131,15 @@ EvidenceSearch = Callable[..., list[Any]]
 EvidenceSourceLoader = Callable[..., list[dict[str, Any]]]
 
 
-DIMENSION_GENERATOR_PROMPT = """你负责把已编译的人才要求转成可取证的动态评估维度。
+DIMENSION_GENERATOR_PROMPT = """你负责把已编译的选品要求转成可取证的动态评估维度。
 只允许根据 semantic_conditions 和 evaluation_preferences 生成维度。
-hard_conditions 已用于候选人过滤，不得再生成评分维度。
+hard_conditions 已用于候选商品过滤，不得再生成评分维度。
 语义要求的来源使用原 requirement_id，偏好按顺序使用 preference:1、preference:2。
-评估维度一般不超过 4 个，维度之间不得重复，必须能通过候选人档案或原始材料取证。
+评估维度一般不超过 4 个，维度之间不得重复，必须能通过商品档案或原始材料取证。
 同一主题的多条要求合并为一个维度，并在 retrieval_hints 中提供多个检索词组合。
 每个 semantic_condition 或 evaluation_preference 只生成一个维度，不得把同一条要求拆成多个维度。
 权重使用整数百分比且合计为 100。评分锚点固定为 0、3、5 分。
-retrieval_hints 应给出可直接用于候选人证据检索的关键词组合。
+retrieval_hints 应给出可直接用于商品证据检索的关键词组合，例如认证名称、检测项目、报价或评价关键词。
 """.strip()
 
 

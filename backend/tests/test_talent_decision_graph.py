@@ -54,7 +54,7 @@ def test_empty_candidate_set_uses_explicit_terminal_branch():
     assert result["status"] == "no_candidates"
     assert result["candidate_ids"] == []
     assert result["evaluations"] == []
-    assert result["report"] == "当前条件下未检索到候选人。"
+    assert result["report"] == "当前条件下未检索到候选商品。"
 
 
 def test_runtime_context_is_required_for_trusted_tenant_data():

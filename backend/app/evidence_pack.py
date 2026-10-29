@@ -60,19 +60,20 @@ class EvidenceSourceValidationError(ValueError):
         self.source_length = source_length
 
 
-EXTRACTION_PROMPT = """根据给定查询要求整理材料中的事实陈述。
+EXTRACTION_PROMPT = """根据给定查询要求整理商品材料中的事实陈述。
 只返回符合 output_schema 的 JSON 对象，不输出说明文字或 Markdown 代码块。
-只抽取与 requirement 相关的项目、时期、职责或成果，保留原文限定词，不补全未知事实。
-event 填写材料明确出现的项目、岗位或事项名称。材料出现星河项目时填写星河项目，只有材料没有可识别事项时才填写 unknown。
-period 对同一时间范围统一写成 YYYY-MM/YYYY-MM，例如 2025 年 1 月至 6 月写成 2025-01/2025-06。
-claim 把查询要求改写成可回答是或否的命题，例如担任项目总负责人。
+只抽取与 requirement 相关的认证结论、检测数据、报价参数或用户反馈，保留原文限定词，不补全未知事实。
+event 填写材料明确出现的证书、报告或事项名称，例如 UN38.3 测试摘要、FCC Part 15B 检测报告。材料没有可识别事项时才填写 unknown。
+period 对证书或报告有效期统一写成 YYYY-MM/YYYY-MM，例如 2025 年 1 月至 2026 年 1 月写成 2025-01/2026-01；只有年份时写 YYYY；没有有效期信息时填写 unknown。
+claim 把查询要求改写成可回答是或否的命题，例如证书在有效期内且覆盖型号与在售 SKU 一致。
 answer 仅使用 yes、no。明确满足命题为 yes，明确否定命题为 no，未回答命题的背景内容不生成事实。
 同一事实的重复转述使用相同的 event、period、claim 和 answer。
+区分卖家声明（详情页宣称、供应商承诺）与检测报告/证书结论：卖家声明不是检测结论，两者冲突时如实分别记录，不得互相替代。
 输入材料使用 source_1、source_2 这类短 chunk_id，输出时必须完整复制，不得截断或改写。
 每条事实必须有输入 chunk_id 和连续原文 quote，quote 不得改写。
 fully_supported 仅表示当前材料直接覆盖当前要求全部要素，缺失、冲突时为 false。
 没有缺失信息时 missing_information 必须返回空数组，不能返回空字符串。
-原文引用正确不代表事实已经独立核实。不评分、不推荐候选人。"""
+原文引用正确不代表事实已经独立核实。不评分、不推荐商品。"""
 
 
 def model_extractor(

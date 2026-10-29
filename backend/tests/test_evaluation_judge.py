@@ -88,7 +88,7 @@ def test_every_judge_module_has_a_task_spec():
     assert set(j.TASK_SPECS) == {
         'request_understanding', 'job_matching', 'dimension_generation', 'fact_extraction',
     }
-    assert j.TASK_SPECS['request_understanding'].startswith('你是人才评估任务编译器')
+    assert j.TASK_SPECS['request_understanding'].startswith('你是跨境电商选品任务编译器')
     assert j.TASK_SPECS['dimension_generation'] == j.DIMENSION_GENERATOR_PROMPT
     assert j.TASK_SPECS['fact_extraction'] == j.EXTRACTION_PROMPT
     assert all(value.strip() for value in j.TASK_SPECS.values())

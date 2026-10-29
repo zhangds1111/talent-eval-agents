@@ -81,7 +81,7 @@ class TalentRequestDraft(BaseModel):
 class TalentRequestRevision(BaseModel):
     draft: TalentRequestDraft
     revision_action: Literal["initial", "add", "update", "remove"] = "initial"
-    revision_summary: str = "建立初始人才要求"
+    revision_summary: str = "建立初始选品要求"
 
 
 class TalentRequestUnderstanding(TalentRequestRevision):
@@ -520,7 +520,7 @@ def _resolve_requirements():
             rendered = "、".join(
                 f"{item['field']} {item['operator']} {item['value']}" for item in filters
             )
-            blocking_reason = f"使用以下结构化条件筛选后未命中候选人：{rendered}"
+            blocking_reason = f"使用以下结构化条件筛选后未命中候选商品：{rendered}"
         selected_job = state.get("selected_job")
         if selected_job is not None:
             editable_request = selected_job["content"]
@@ -539,7 +539,7 @@ def _resolve_requirements():
             "interaction_id": interaction_id,
             "reason_code": reason_code,
             "blocking_reason": blocking_reason,
-            "question": "请补充或修订人才要求后重新提交，或取消本次任务",
+            "question": "请补充或修订选品条件后重新提交，或取消本次任务",
             "request_text": editable_request,
             "request_source": request_source,
             "selected_job": selected_job_source,
@@ -716,7 +716,7 @@ def _resolve_empty_candidates(candidate_filter: CandidateFilter):
         payload = {
             "type": "empty_candidate_set",
             "interaction_id": interaction_id,
-            "question": "当前条件未命中任何候选人，可放宽部分条件后重试，或取消本次任务",
+            "question": "当前条件未命中任何候选商品，可放宽部分条件后重试，或取消本次任务",
             "filters": diagnostics,
             "actions": ["relax", "cancel"],
         }
@@ -820,19 +820,18 @@ def build_talent_request_graph(
     return builder.compile(checkpointer=checkpointer) if checkpointer is not None else builder.compile()
 
 
-MODEL_SYSTEM_PROMPT = """你是人才评估任务编译器。按照给定 Schema 输出结构化结果。
+MODEL_SYSTEM_PROMPT = """你是跨境电商选品任务编译器。按照给定 Schema 输出结构化结果。
 结合最近消息窗口和 previous_request，输出本轮修订后的完整 TalentRequestDraft。
 首轮 revision_action 为 initial，conversation_title 为空时生成不超过 20 个中文字的标题。
 已有 conversation_title 时不生成标题，后续轮根据最新消息在 add、update、remove 中选择，保留未被修改的既有条件。
 用 revision_summary 简要说明变化。
-如果输入只有岗位名称或岗位简称，input_mode 使用 job_name，只填写 job_query，不根据岗位名称猜测条件。
-如果输入包含地区、年限、职级、技能、项目经验或偏好，input_mode 使用 detailed_requirement。
+input_mode 一律使用 detailed_requirement：直接把用户自然语言需求（目标市场、渠道、品类、售价、成本、毛利、重量、是否带电、电池类型、认证偏好、评分或选品偏好）编译为结构化条件，不输出 job_query、不引用任何模板。
 结构化硬条件只能写入 filters，字段定义与允许的操作符如下：
 {filter_dsl}
-地名只能映射为 region，current_position 只表示当前岗位名称，禁止将地名写入 current_position。
-技能、经历和成果写入 semantic_requirements。优先项写入 evaluation_preferences。
-只有歧义或矛盾导致无法形成可执行查询计划时才写入 clarifications。资深、经验丰富等可以用于语义检索或排序的描述写入 semantic_requirements 或 evaluation_preferences，不要求补充年龄等结构化阈值。租户和权限不得从用户文本提取。
-当输入中包含 confirmed_job 时，按照已确认岗位 JD 编译条件，并保留用户补充要求。"""
+国家或地区只映射为 region（目标市场），current_position 只表示商品子类，禁止将市场或国家写入 current_position。
+价格、成本、毛利、重量、评分等可量化条件写入 filters；“需求旺盛”“质量稳定”“差评少”等无法精确过滤的要求写入 semantic_requirements；“优先低 MOQ”“优先交期短”等写入 evaluation_preferences。
+只有歧义或矛盾导致无法形成可执行查询计划时才写入 clarifications。租户和权限不得从用户文本提取。
+本阶段没有选品模板，不根据模板名称猜测条件，也不输出 job_name 输入模式。"""
 
 
 def model_request_interpreter(

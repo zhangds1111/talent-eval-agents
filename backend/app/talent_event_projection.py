@@ -4,9 +4,9 @@ from typing import Any
 
 
 STEP_BY_START_NODE = {
-    "receive_request": ("understand_request", "workflow", "理解人才要求"),
-    "interpret_input": ("understand_request", "workflow", "理解人才要求"),
-    "filter_candidates": ("filter_candidates", "tool", "筛选候选人"),
+    "receive_request": ("understand_request", "workflow", "理解选品需求"),
+    "interpret_input": ("understand_request", "workflow", "理解选品需求"),
+    "filter_candidates": ("filter_candidates", "tool", "筛选候选商品"),
     "generate_dimensions": ("build_dimensions", "workflow", "生成评估维度"),
     "prepare_work_items": (
         "parallel_assessment",
@@ -24,8 +24,8 @@ STEP_BY_START_NODE = {
 
 
 STEP_BY_COMPLETION_NODE = {
-    "build_plan": ("understand_request", "workflow", "理解人才要求"),
-    "filter_candidates": ("filter_candidates", "tool", "筛选候选人"),
+    "build_plan": ("understand_request", "workflow", "理解选品需求"),
+    "filter_candidates": ("filter_candidates", "tool", "筛选候选商品"),
     "validate_dimensions": ("build_dimensions", "workflow", "生成评估维度"),
     "finalize": (
         "parallel_assessment",
@@ -141,9 +141,9 @@ def _requirement_revision(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "interaction_type": "requirement_revision",
         "interaction_id": str(payload.get("interaction_id", "")),
-        "title": "修订人才要求",
+        "title": "修订选品条件",
         "description": str(
-            payload.get("blocking_reason") or payload.get("question") or "当前要求需要修订"
+            payload.get("blocking_reason") or payload.get("question") or "当前选品条件需要修订"
         ),
         "input_kind": "text",
         "initial_value": str(payload.get("request_text", "")),

@@ -28,7 +28,7 @@ class FilterField(StrEnum):
 
 
 class FilterCondition(BaseModel):
-    field: FilterField = Field(description="结构化人才字段，只能使用 FilterField 枚举中的值")
+    field: FilterField = Field(description="结构化商品筛选字段，只能使用 FilterField 枚举中的值")
     operator: Literal["eq", "in", "lt", "lte", "gt", "gte"] = Field(
         description="比较操作符：eq 等于，in 属于集合，lt/lte/gt/gte 为数值比较"
     )
@@ -48,7 +48,7 @@ class FilterCondition(BaseModel):
 
 class SemanticRequirement(BaseModel):
     requirement_id: str = Field(pattern=r"^S\d+$", description="语义要求编号，如 S1、S2")
-    query: str = Field(min_length=1, max_length=500, description="需要在人才材料中检索的经历、技能或成果要求")
+    query: str = Field(min_length=1, max_length=500, description="需要在商品材料中检索的认证、检测、报价或口碑要求")
     required: bool = Field(default=True, description="用户是否把该语义要求表达为必须条件")
 
 
@@ -107,13 +107,13 @@ def _age_spec(item: FilterCondition, today: date):
 
 
 FILTER_FIELD_REGISTRY = {
-    FilterField.AGE: FilterFieldSpec("年龄，由 birth_date 按查询基准日换算", frozenset({"lt", "lte", "gt", "gte"}), _age_spec),
-    FilterField.REGION: _column_spec(EmployeeProfile.region, "工作地区", {"eq", "in"}),
-    FilterField.DEPARTMENT: _column_spec(EmployeeProfile.department, "所属部门", {"eq", "in"}),
-    FilterField.JOB_LEVEL: _column_spec(EmployeeProfile.job_level, "职级，编码格式为 L1、L2 等", {"eq", "in"}),
-    FilterField.YEARS_OF_EXPERIENCE: _column_spec(EmployeeProfile.years_of_experience, "工作年限", {"eq", "lt", "lte", "gt", "gte"}),
-    FilterField.CURRENT_POSITION: _column_spec(EmployeeProfile.current_position, "当前岗位", {"eq", "in"}),
-    FilterField.EMPLOYMENT_STATUS: _column_spec(EmployeeProfile.employment_status, "在职状态", {"eq", "in"}),
+    FilterField.AGE: FilterFieldSpec("上架时长（月），由 birth_date 按查询基准日换算", frozenset({"lt", "lte", "gt", "gte"}), _age_spec),
+    FilterField.REGION: _column_spec(EmployeeProfile.region, "目标市场（国家或地区）", {"eq", "in"}),
+    FilterField.DEPARTMENT: _column_spec(EmployeeProfile.department, "商品品类", {"eq", "in"}),
+    FilterField.JOB_LEVEL: _column_spec(EmployeeProfile.job_level, "内部等级编码，格式为 L1、L2 等", {"eq", "in"}),
+    FilterField.YEARS_OF_EXPERIENCE: _column_spec(EmployeeProfile.years_of_experience, "评价数量等数值属性", {"eq", "lt", "lte", "gt", "gte"}),
+    FilterField.CURRENT_POSITION: _column_spec(EmployeeProfile.current_position, "商品子类", {"eq", "in"}),
+    FilterField.EMPLOYMENT_STATUS: _column_spec(EmployeeProfile.employment_status, "商品状态", {"eq", "in"}),
 }
 
 
@@ -202,7 +202,7 @@ def optimize_semantic_query(requirement: SemanticRequirement, *, strategy: str, 
     structured_model = model.with_structured_output(QueryOptimizationPlan, method="function_calling")
     return structured_model.invoke(
         [
-            ("system", "根据指定策略生成检索查询。保留原始人才条件，不增加年限、职级或技能要求。最多返回 3 条查询。"),
+            ("system", "根据指定策略生成检索查询。保留原始选品条件，不增加市场、品类或认证要求。最多返回 3 条查询。"),
             ("user", f"strategy={strategy}\noriginal_requirement={requirement.query}"),
         ]
     )
@@ -247,10 +247,10 @@ def search_with_optimization(
     }
 
 
-QUERY_PLAN_SYSTEM_PROMPT = """你是人才查询计划编译器。只把用户明确表达的条件转换为 QueryPlan。
+QUERY_PLAN_SYSTEM_PROMPT = """你是跨境电商选品查询计划编译器。只把用户明确表达的条件转换为 QueryPlan。
 硬条件只允许使用下面的 Filter DSL，禁止生成 SQL：
 {filter_dsl}
-经历、技能、项目成果等材料内容写入 semantic_requirements。
+市场规模、认证齐全、质量口碑、差评集中点等材料内容写入 semantic_requirements。
 “优先”等软偏好写入 preferences，不能改写为硬条件。
 含糊表达写入 clarifications，禁止自行补充阈值。权限、租户和密级不从用户文本提取。"""
 

@@ -702,7 +702,7 @@ def search_talent(
         raise
     except Exception as exc:
         logger.exception("talent_search_failed tenant_id=%s", x_tenant_id)
-        raise HTTPException(503, f"人才检索失败: {exc}") from exc
+        raise HTTPException(503, f"商品检索失败: {exc}") from exc
 
 
 @router.post("/jobs/{job_id}/retry")

@@ -279,7 +279,8 @@ def test_model_interpreter_prompt_distinguishes_region_from_current_position(mon
 
     system_prompt = captured["messages"][0][1]
     assert "结合最近消息窗口和 previous_request" in system_prompt
-    assert "region: 工作地区" in system_prompt
-    assert "current_position: 当前岗位" in system_prompt
-    assert "地名只能映射为 region" in system_prompt
+    assert "region: 目标市场（国家或地区）" in system_prompt
+    assert "current_position: 商品子类" in system_prompt
+    assert "国家或地区只映射为 region" in system_prompt
+    assert "input_mode 一律使用 detailed_requirement" in system_prompt
     assert result.draft.filters[0].field.value == "region"

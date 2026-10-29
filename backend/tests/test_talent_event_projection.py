@@ -34,7 +34,7 @@ def test_actual_request_node_projects_only_safe_business_fields():
             "data": {
                 "step_id": "understand_request",
                 "kind": "workflow",
-                "title": "理解人才要求",
+                "title": "理解选品需求",
                 "summary": "plan_ready",
                 "output": {
                     "status": "plan_ready",
@@ -118,7 +118,7 @@ def test_requirement_revision_interrupt_keeps_real_reason_and_editable_text():
     assert projected[0]["data"] == {
         "interaction_type": "requirement_revision",
         "interaction_id": "rr-v0",
-        "title": "修订人才要求",
+        "title": "修订选品条件",
         "description": "地区条件被错误解析",
         "input_kind": "text",
         "initial_value": "筛选上海候选人",

@@ -102,8 +102,8 @@ def test_filter_registry_is_also_sent_to_query_compiler():
     filter_dsl = filter_dsl_catalog()
     print(filter_dsl)
     assert seen["schema"] is QueryPlan
-    assert "age: 年龄" in seen["messages"][0][1]
-    assert "region: 工作地区" in filter_dsl
+    assert "age: 上架时长（月）" in seen["messages"][0][1]
+    assert "region: 目标市场（国家或地区）" in filter_dsl
 
 
 def test_query_optimization_is_triggered_by_failure_type():

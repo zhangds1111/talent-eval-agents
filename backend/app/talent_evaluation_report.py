@@ -77,7 +77,7 @@ class DimensionJudgement(BaseModel):
 
 
 class ConsistencyIssue(BaseModel):
-    candidate_id: str = Field(description="存在跨维度逻辑冲突的候选人编号")
+    candidate_id: str = Field(description="存在跨维度逻辑冲突的商品编号")
     dimension_numbers: list[int] = Field(
         min_length=2,
         max_length=6,
@@ -140,16 +140,16 @@ class ReportPoint(BaseModel):
 
 
 class CandidateReportDraft(BaseModel):
-    candidate_id: str = Field(description="候选人编号，顺序必须与输入排名一致")
+    candidate_id: str = Field(description="商品编号，顺序必须与输入排名一致")
     summary: str = Field(
         min_length=1,
         max_length=1000,
-        description="候选人的综合结论，需同时反映已确认得分、覆盖率和置信度",
+        description="商品的综合结论，需同时反映已确认得分、覆盖率和置信度",
     )
     highlights: list[ReportPoint] = Field(
         default_factory=list,
         max_length=8,
-        description="候选人的主要匹配依据，每一项必须带有已提供的短证据编号",
+        description="商品的主要匹配依据，每一项必须带有已提供的短证据编号",
     )
     risks: list[str] = Field(
         default_factory=list,
@@ -162,16 +162,16 @@ class ReportDraft(BaseModel):
     title: str = Field(
         min_length=1,
         max_length=120,
-        description="整份候选人评估报告的标题",
+        description="整份选品评估报告的标题",
     )
     overview: str = Field(
         min_length=1,
         max_length=1500,
-        description="按程序排名概括候选人总体差异，不得修改分数或排序",
+        description="按程序排名概括候选商品总体差异，不得修改分数或排序",
     )
     candidates: list[CandidateReportDraft] = Field(
         min_length=1,
-        description="候选人报告列表，数量和顺序必须与输入排名完全一致",
+        description="商品报告列表，数量和顺序必须与输入排名完全一致",
     )
 
 
@@ -324,6 +324,7 @@ def _branch_model_payload(
 
 DIMENSION_SCORER_PROMPT = """你负责依据单个评估维度的定义、证据要求和 0/3/5 分锚点完成评分。
 输入中的证据使用 E1、E2 这类短编号。evidence_refs 只能逐字复制这些短编号，不得缩写、改写或生成编号。
+评分只依据检测报告、证书、报价单等材料事实；详情页宣称等卖家声明不能单独作为检测结论支撑满分。
 有完整可评分证据时使用 sufficient，存在可评分事实但仍有缺失时使用 partial。
 材料无法支持评分时使用 missing，同一事实范围存在互斥说法时使用 conflicting。
 missing 和 conflicting 的 score 必须为 null，材料缺失不能解释为 0 分。
@@ -370,13 +371,14 @@ def build_structured_dimension_scorer(
     return score
 
 
-REPORT_WRITER_PROMPT = """你负责将已排序的候选人评估结果组织为结构化报告草稿。
-保持输入中的候选人顺序，不得修改分数、排名、证据状态或风险结论。
-输入中的证据使用 E1、E2 这类短编号。ReportPoint.evidence_refs 只能逐字复制当前候选人已评分结果中的短编号。
-title 是整份报告标题，overview 按当前排名概括总体差异，candidates 必须与输入候选人数量和顺序一致。
-CandidateReportDraft.summary 概括当前候选人的得分、覆盖率与置信度，highlights 只整理有证据的主要依据。
-每名候选人最多 8 条 highlights、8 条 risks，每条 highlight 最多引用 8 个 evidence_refs，选择直接支撑该判断的证据。
+REPORT_WRITER_PROMPT = """你负责将已排序的候选商品评估结果组织为结构化报告草稿。
+保持输入中的候选商品顺序，不得修改分数、排名、证据状态或风险结论。
+输入中的证据使用 E1、E2 这类短编号。ReportPoint.evidence_refs 只能逐字复制当前商品已评分结果中的短编号。
+title 是整份报告标题，overview 按当前排名概括总体差异，candidates 必须与输入商品数量和顺序一致。
+CandidateReportDraft.summary 概括当前商品的得分、覆盖率与置信度，highlights 只整理有证据的主要依据。
+每个商品最多 8 条 highlights、8 条 risks，每条 highlight 最多引用 8 个 evidence_refs，选择直接支撑该判断的证据。
 risks 只整理输入中已有的缺失、冲突、执行失败和置信度风险，不得推测新风险。
+报告只能表述「有证据/缺证据」及证据所示事实，不得对认证合规性下「合规/不合规」结论。
 报告草稿只负责概述、主要依据和风险表达，Markdown 与可点击链接由程序渲染。
 """.strip()
 
@@ -455,9 +457,9 @@ def build_structured_report_writer(
     return write
 
 
-CONSISTENCY_REVIEW_PROMPT = """你负责检查同一候选人的多个维度评估是否存在跨维度逻辑冲突。
+CONSISTENCY_REVIEW_PROMPT = """你负责检查同一候选商品的多个维度评估是否存在跨维度逻辑冲突。
 只检查具有明确证据的矛盾，不得把材料缺失或表达粒度差异判定为冲突。
-每个问题必须至少关联两个维度，candidate_id 必须复制输入中的候选人编号。
+每个问题必须至少关联两个维度，candidate_id 必须复制输入中的商品编号。
 输入中的证据使用 E1、E2 这类短编号。evidence_refs 只能逐字复制输入中的短编号，不得缩写或改写。
 dimension_numbers 记录发生冲突的维度序号，message 说明互相矛盾的已评分结论或事实。
 当没有冲突时返回空 issues。

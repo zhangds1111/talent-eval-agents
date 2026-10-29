@@ -122,7 +122,7 @@ def _evaluate(state: TalentDecisionState) -> dict:
 
 def _compose_report(state: TalentDecisionState) -> dict:
     candidate_text = "、".join(item["candidate_id"] for item in state["evaluations"])
-    return {"report": f"候选人评估占位结果：{candidate_text}", "status": "drafting"}
+    return {"report": f"候选商品评估占位结果：{candidate_text}", "status": "drafting"}
 
 
 def _validate_report(state: TalentDecisionState) -> dict:
@@ -143,7 +143,7 @@ def _route_report(state: TalentDecisionState) -> Literal["retry", "done"]:
 def _no_candidates(_: TalentDecisionState) -> dict:
     return {
         "evaluations": [],
-        "report": "当前条件下未检索到候选人。",
+        "report": "当前条件下未检索到候选商品。",
         "status": "no_candidates",
     }
 

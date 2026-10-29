@@ -190,7 +190,7 @@ def test_resume_rejects_unknown_choice():
         )
 
         assert response.status_code == 409
-        assert response.json()["detail"] == "请选择有效的岗位"
+        assert response.json()["detail"] == "请选择有效的候选商品"
 
 
 def test_history_endpoints_return_saved_run_and_detail():
