@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import Select, and_, select
 from sqlalchemy.orm import Session
 
-from app.models import EmployeeProfile
+from app.models import EmployeeProfile, ProductAttributes
 
 
 class TaskType(StrEnum):
@@ -25,6 +25,23 @@ class FilterField(StrEnum):
     YEARS_OF_EXPERIENCE = "years_of_experience"
     CURRENT_POSITION = "current_position"
     EMPLOYMENT_STATUS = "employment_status"
+    TARGET_PRICE = "target_price"
+    LANDED_COST = "landed_cost"
+    GROSS_MARGIN_PERCENT = "gross_margin_percent"
+
+
+NUMERIC_FIELDS = frozenset({
+    FilterField.AGE,
+    FilterField.YEARS_OF_EXPERIENCE,
+    FilterField.TARGET_PRICE,
+    FilterField.LANDED_COST,
+    FilterField.GROSS_MARGIN_PERCENT,
+})
+PRODUCT_ATTRIBUTE_FIELDS = frozenset({
+    FilterField.TARGET_PRICE,
+    FilterField.LANDED_COST,
+    FilterField.GROSS_MARGIN_PERCENT,
+})
 
 
 class FilterCondition(BaseModel):
@@ -36,8 +53,7 @@ class FilterCondition(BaseModel):
 
     @model_validator(mode="after")
     def validate_operator_and_value(self):
-        numeric = {FilterField.AGE, FilterField.YEARS_OF_EXPERIENCE}
-        if self.operator in {"lt", "lte", "gt", "gte"} and self.field not in numeric:
+        if self.operator in {"lt", "lte", "gt", "gte"} and self.field not in NUMERIC_FIELDS:
             raise ValueError("范围运算符只允许用于数值字段")
         if self.operator == "in" and not isinstance(self.value, list):
             raise ValueError("in 运算符必须接收列表")
@@ -113,6 +129,13 @@ FILTER_FIELD_REGISTRY = {
     FilterField.JOB_LEVEL: _column_spec(EmployeeProfile.job_level, "内部等级编码，格式为 L1、L2 等", {"eq", "in"}),
     FilterField.YEARS_OF_EXPERIENCE: _column_spec(EmployeeProfile.years_of_experience, "评价数量等数值属性", {"eq", "lt", "lte", "gt", "gte"}),
     FilterField.CURRENT_POSITION: _column_spec(EmployeeProfile.current_position, "商品子类", {"eq", "in"}),
+    FilterField.TARGET_PRICE: _column_spec(ProductAttributes.target_price, "目标售价（商品自身币种，美国站 USD、欧盟站 EUR）", {"lt", "lte", "gt", "gte"}),
+    FilterField.LANDED_COST: _column_spec(ProductAttributes.landed_cost, "到岸成本（采购价+头程+平台费估算，与售价同币种）", {"lt", "lte", "gt", "gte"}),
+    FilterField.GROSS_MARGIN_PERCENT: _column_spec(
+        (ProductAttributes.target_price - ProductAttributes.landed_cost) * 100 / ProductAttributes.target_price,
+        "毛利率百分比，由 SQL 按 (售价-到岸成本)/售价 计算，如 40 表示 40%",
+        {"lt", "lte", "gt", "gte"},
+    ),
     FilterField.EMPLOYMENT_STATUS: _column_spec(EmployeeProfile.employment_status, "商品在售状态，取值仅 active 或 inactive；禁止写入是否带电、电池类型、认证等商品属性", {"eq", "in"}),
 }
 
@@ -143,7 +166,11 @@ def build_candidate_statement(
             raise ValueError(f"{item.field.value} 不支持 {item.operator} 操作符")
         clauses.append(spec.build(item, current_day))
 
-    return select(EmployeeProfile.employee_no).where(and_(*clauses)).order_by(EmployeeProfile.employee_no)
+    statement = select(EmployeeProfile.employee_no)
+    if any(item.field in PRODUCT_ATTRIBUTE_FIELDS for item in plan.filters):
+        # 内连接：没有数值属性的商品无法判断价格/毛利条件，不应被放行
+        statement = statement.join(ProductAttributes, ProductAttributes.product_id == EmployeeProfile.id)
+    return statement.where(and_(*clauses)).order_by(EmployeeProfile.employee_no)
 
 
 def select_candidate_ids(db: Session, plan: QueryPlan, *, tenant_id: str, today: date | None = None) -> list[str]:

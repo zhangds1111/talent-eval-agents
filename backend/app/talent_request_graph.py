@@ -829,7 +829,7 @@ input_mode 一律使用 detailed_requirement：直接把用户自然语言需求
 结构化硬条件只能写入 filters，字段定义与允许的操作符如下：
 {filter_dsl}
 国家或地区只映射为 region（目标市场），current_position 只表示商品子类，禁止将市场或国家写入 current_position。
-本阶段没有价格、成本、毛利、重量、评分、是否带电、电池类型、认证的结构化字段，这些条件一律写入 semantic_requirements，不得塞进 filters 中语义不符的字段；“需求旺盛”“质量稳定”“差评少”等无法精确过滤的要求写入 semantic_requirements；“优先低 MOQ”“优先交期短”等写入 evaluation_preferences。
+售价、到岸成本、毛利率的量化阈值写入 filters（target_price、landed_cost、gross_margin_percent；“毛利不低于 40%”即 gross_margin_percent gte 40）；是否带电、电池类型、重量、评分等没有结构化字段的条件写入 semantic_requirements，不得塞进 filters 中语义不符的字段；必需认证的缺口由程序按规则表计算，用户点名的认证/检测报告仍写入 semantic_requirements 以检索材料证据；“需求旺盛”“质量稳定”“差评少”等无法精确过滤的要求写入 semantic_requirements；“优先低 MOQ”“优先交期短”等写入 evaluation_preferences。
 只有歧义或矛盾导致无法形成可执行查询计划时才写入 clarifications。租户和权限不得从用户文本提取。
 本阶段没有选品模板，不根据模板名称猜测条件，也不输出 job_name 输入模式。"""
 

@@ -69,3 +69,27 @@ def test_product_without_attributes_has_no_fabricated_facts(session_factory):
         facts = load_product_facts(db, ["SKU-NEW-1"])
     assert facts["SKU-NEW-1"].unit_economics is None
     assert facts["SKU-NEW-1"].certification_checks == []
+
+
+def test_gross_margin_filter_is_sql_computed(session_factory):
+    from app.query_plan import FilterCondition, QueryPlan, TaskType, select_candidate_ids
+
+    plan = QueryPlan(
+        task_type=TaskType.FIND_TALENT,
+        filters=[
+            FilterCondition(field="region", operator="eq", value="美国"),
+            FilterCondition(field="department", operator="eq", value="户外照明"),
+            FilterCondition(field="gross_margin_percent", operator="gte", value=40),
+        ],
+    )
+    with session_factory() as db:
+        ids = select_candidate_ids(db, plan, tenant_id="course-demo")
+    assert ids == ["SKU-CL-001"]  # SKU-CL-002 毛利 33.8% 被 SQL 排除
+
+
+def test_price_filter_rejects_non_numeric_operator():
+    from app.query_plan import FilterCondition
+
+    with pytest.raises(ValueError):
+        FilterCondition(field="region", operator="gte", value=1)
+    assert FilterCondition(field="target_price", operator="lte", value=20).value == 20
