@@ -347,14 +347,14 @@ uv run --no-sync pytest -q tests/test_talent_tools.py tests/test_talent_decision
 
 | 路径 | 用途 |
 |---|---|
-| `backend/app/talent_mcp_server.py` | 人才 MCP Server、4 个 Tools、3 类 Resources、评估 Prompt 与 Access Token Context 映射 |
+| `backend/app/product_mcp_server.py` | 选品 MCP Server：`filter_products`、`search_product_evidence`、`get_product_profiles`、`check_product_compliance` 4 个 Tools，SKU 档案与必需认证规则 2 类 Resources，`product_assessment` Prompt，scope `product:read` |
 | `backend/app/talent_mcp_client.py` | 将 MCPAdapter 发现的 LangChain Tools 放入 LangGraph ToolNode |
 | `backend/samples/lesson13/codestats_mcp_v2.py` | FastMCP v1 示例的 SDK v2 迁移版，包含 Tool、Resource、目录边界与 STDIO 入口 |
 | `backend/tests/test_codestats_mcp_v2.py` | 验证 CodeStats Tool、Resource、`.venv` 排除和目录越界拦截 |
-| `backend/tests/test_talent_mcp_server.py` | 验证能力发现、结构化结果、Resource、Prompt、scope、audience 和租户隔离 |
+| `backend/tests/test_product_mcp_server.py` | 验证能力发现、结构化结果、Resource、Prompt、scope、audience 和租户隔离 |
 | `backend/tests/test_talent_mcp_client.py` | 验证 MCP 工具在 LangGraph ToolNode 中的异步执行 |
-| `backend/scripts/verify_talent_mcp.py` | 使用隔离 SQLite 数据启动 Streamable HTTP，验证协议、鉴权和 LangGraph 链路 |
-| `backend/scripts/run_talent_mcp_http.py` | 长驻启动无鉴权的本机 Streamable HTTP Demo Server，供 Inspector 和其他 Host 联调 |
+| `backend/scripts/verify_product_mcp.py` | 使用隔离 SQLite 数据启动 Streamable HTTP，验证协议、鉴权和 LangGraph 链路 |
+| `backend/scripts/run_product_mcp_http.py` | 长驻启动无鉴权的本机 Streamable HTTP Demo Server，供 Inspector 和其他 Host 联调 |
 
 MCP 适配层直接复用第 12 课的 `TalentToolService` 和 `ToolExecutor`。`talent_tools.py` 只新增了按 `job_code` 读取单个岗位 JD 的方法，且 SQL 继续强制使用可信 `tenant_id`
 
@@ -381,11 +381,11 @@ CODE_STATS_ROOT=/Users/noora/projects \
 uv run --no-sync mcp dev samples/lesson13/codestats_mcp_v2.py
 ```
 
-启动可供外部 MCP Client 连接的人才能力 Demo Server：
+启动可供外部 MCP Client 连接的选品能力 Demo Server：
 
 ```bash
 cd backend
-uv run --no-sync python scripts/run_talent_mcp_http.py
+uv run --no-sync python scripts/run_product_mcp_http.py
 ```
 
 默认 endpoint 为 `http://127.0.0.1:18081/mcp`。服务使用临时 SQLite、固定 `tenant-a` Context、`stateless_http=True` 和 `json_response=True`，退出后删除临时数据。该入口没有鉴权，只用于本机调试
@@ -406,21 +406,21 @@ npx @modelcontextprotocol/inspector --cli http://127.0.0.1:18081/mcp --transport
 
 ```bash
 cd backend
-uv run --no-sync python scripts/verify_talent_mcp.py
+uv run --no-sync python scripts/verify_product_mcp.py
 ```
 
 核心输出：
 
 ```text
-[protocol] {"protocol": "2026-07-28", "tools": ["lookup_job_descriptions", "filter_candidates", "search_candidate_evidence", "get_candidate_profiles"], "resource_templates": ["talent://jobs/{job_code}", "talent://candidates/{candidate_id}/profile"], "resource_job_code": "JD-AI-001", "prompt_role": "user"}
+[protocol] {"protocol": "2026-07-28", "tools": ["filter_products", "search_product_evidence", "get_product_profiles", "check_product_compliance"], "resource_templates": ["product://skus/{sku_id}/profile"], "resource_sku": "SKU-DEMO-001", "prompt_role": "user"}
 [auth] {"missing_token": 401, "missing_scope": 403, "wrong_audience": 401, "true_audience": 200}
-[langgraph] {"discovered_tools": ["lookup_job_descriptions", "filter_candidates", "search_candidate_evidence", "get_candidate_profiles"], "candidate_ids": ["C001"], "tool_status": "success"}
+[langgraph] {"discovered_tools": ["filter_products", "search_product_evidence", "get_product_profiles", "check_product_compliance"], "sku_ids": ["SKU-DEMO-001"], "tool_status": "success"}
 ```
 
 运行本节定向测试：
 
 ```bash
-uv run --no-sync pytest -q tests/test_codestats_mcp_v2.py tests/test_talent_mcp_client.py tests/test_talent_mcp_server.py tests/test_talent_tools.py
+uv run --no-sync pytest -q tests/test_codestats_mcp_v2.py tests/test_talent_mcp_client.py tests/test_product_mcp_server.py tests/test_talent_tools.py
 ```
 
 结果输出为 `38 passed in 2.05s`。后端完整回归结果为 `177 passed, 2 warnings in 6.69s`

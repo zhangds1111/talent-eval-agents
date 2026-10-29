@@ -334,6 +334,33 @@ class TalentToolService:
             for row in rows
         ]
 
+    def check_product_compliance(self, candidate_ids: list[str], *, context: TalentToolContext) -> list[dict[str, Any]]:
+        """程序计算毛利与必需认证缺口；只返回当前租户内的在售商品。"""
+        from app.product_compliance import load_product_facts
+
+        allowed = [item["candidate_id"] for item in self.get_candidate_profiles(candidate_ids, context=context)]
+        if not allowed:
+            return []
+        with self.session_factory() as db:
+            facts = load_product_facts(db, allowed)
+        return [
+            {**facts[candidate_id].model_dump(mode="json"),
+             "certification_gap_count": len(facts[candidate_id].certification_gaps)}
+            for candidate_id in allowed if candidate_id in facts
+        ]
+
+    def list_certification_rules(self, *, context: TalentToolContext) -> list[dict[str, Any]]:
+        from app.models import CertificationRule
+
+        self._check_context(context)
+        with self.session_factory() as db:
+            rows = db.scalars(select(CertificationRule).order_by(CertificationRule.id)).all()
+        return [
+            {"market": row.market, "category": row.category, "applies_when": row.applies_when,
+             "certification": row.certification, "rationale": row.rationale}
+            for row in rows
+        ]
+
     def search_candidate_evidence(
         self, query: str, candidate_ids: list[str], *, context: TalentToolContext,
     ) -> dict[str, Any]:

@@ -24,11 +24,17 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.models import Base, EmployeeProfile, JobDescription  # noqa: E402
+from app.models import (  # noqa: E402
+    Base,
+    CertificationRule,
+    EmployeeProfile,
+    ProductAttributes,
+    ProductCertification,
+)
 from app.talent_mcp_client import build_mcp_tool_graph  # noqa: E402
-from app.talent_mcp_server import (  # noqa: E402
-    authenticated_talent_context,
-    build_talent_mcp_server,
+from app.product_mcp_server import (  # noqa: E402
+    authenticated_product_context,
+    build_product_mcp_server,
 )
 from app.talent_tools import TalentToolContext, TalentToolService, ToolExecutor  # noqa: E402
 
@@ -41,41 +47,48 @@ class DemoTokenVerifier:
         return self.tokens.get(token)
 
 
-def build_demo_service(database_path: Path) -> TalentToolService:
-    engine = create_engine(f"sqlite:///{database_path}")
+def seed_demo_products(engine) -> None:
+    """隔离 SQLite 演示数据：tenant-a 一个美国站锂电露营灯，tenant-b 一个越权 SKU。"""
     Base.metadata.create_all(engine)
     with Session(engine) as db:
+        lamp = EmployeeProfile(
+            employee_no="SKU-DEMO-001",
+            tenant_id="tenant-a",
+            name="演示露营灯（虚构）",
+            region="美国",
+            current_position="充电式露营灯",
+            department="户外照明",
+        )
+        other = EmployeeProfile(
+            employee_no="SKU-OTHER-001",
+            tenant_id="tenant-b",
+            name="其他租户商品",
+            region="美国",
+            current_position="充电式露营灯",
+            department="户外照明",
+        )
+        db.add_all([lamp, other])
+        db.flush()
         db.add_all(
             [
-                JobDescription(
-                    job_code="JD-AI-001",
-                    tenant_id="tenant-a",
-                    name="高级 AI 应用工程师",
-                    content="负责企业知识库与 Agent 应用建设",
-                    version=2,
+                ProductAttributes(
+                    product_id=lamp.id, model_no="DL-1", currency="USD", target_price=20, landed_cost=11,
+                    is_electrical=True, has_lithium_battery=True,
                 ),
-                EmployeeProfile(
-                    employee_no="C001",
-                    tenant_id="tenant-a",
-                    name="林晓岚",
-                    birth_date=date(1993, 5, 1),
-                    region="上海",
-                    current_position="AI 应用工程师",
-                    job_level="L3",
-                    years_of_experience=7,
-                    department="技术中心",
-                ),
-                EmployeeProfile(
-                    employee_no="C002",
-                    tenant_id="tenant-b",
-                    name="其他租户候选人",
-                    region="上海",
-                    job_level="L4",
-                    years_of_experience=9,
-                ),
+                CertificationRule(market="美国", category="*", applies_when="electrical",
+                                  certification="FCC Part 15", rationale="演示规则"),
+                CertificationRule(market="*", category="*", applies_when="lithium_battery",
+                                  certification="UN38.3", rationale="演示规则"),
+                ProductCertification(product_id=lamp.id, certification="UN38.3", document_no="FICT-DEMO-1",
+                                     applicable_model="DL-1", valid_until=date(2099, 1, 1), source_material="demo.md"),
             ]
         )
         db.commit()
+
+
+def build_demo_service(database_path: Path) -> TalentToolService:
+    engine = create_engine(f"sqlite:///{database_path}")
+    seed_demo_products(engine)
 
     def session_factory() -> Session:
         return Session(engine)
@@ -108,16 +121,16 @@ async def verify_protocol(server) -> dict[str, object]:
     async with Client(server) as client:
         tools = await client.list_tools()
         templates = await client.list_resource_templates()
-        resource = await client.read_resource("talent://jobs/JD-AI-001")
+        resource = await client.read_resource("product://skus/SKU-DEMO-001/profile")
         prompt = await client.get_prompt(
-            "talent_assessment",
-            {"job_code": "JD-AI-001", "request_text": "筛选上海候选人"},
+            "product_assessment",
+            {"request_text": "美国站户外照明，毛利不低于 40%"},
         )
         return {
             "protocol": client.protocol_version,
             "tools": [item.name for item in tools.tools],
             "resource_templates": [item.uri_template for item in templates.resource_templates],
-            "resource_job_code": json.loads(resource.contents[0].text)["job_code"],
+            "resource_sku": json.loads(resource.contents[0].text)["candidate_id"],
             "prompt_role": prompt.messages[0].role,
         }
 
@@ -129,37 +142,37 @@ async def verify_auth(service: TalentToolService) -> dict[str, int]:
         {
             "missing-scope": AccessToken(
                 token="missing-scope",
-                client_id="talent-chat",
+                client_id="product-chat",
                 scopes=[],
                 resource=resource,
                 claims=common_claims,
             ),
             "wrong-audience": AccessToken(
                 token="wrong-audience",
-                client_id="talent-chat",
-                scopes=["talent:read"],
+                client_id="product-chat",
+                scopes=["product:read"],
                 resource="https://other.example.com/mcp",
                 claims=common_claims,
             ),
             "true-audience": AccessToken(
                 token="true-audience",
-                client_id="talent-chat",
-                scopes=["talent:read"],
+                client_id="product-chat",
+                scopes=["product:read"],
                 resource=resource,
                 claims=common_claims,
             ),
         }
     )
-    server = build_talent_mcp_server(
+    server = build_product_mcp_server(
         service,
         ToolExecutor(),
-        context_provider=authenticated_talent_context,
+        context_provider=authenticated_product_context,
         token_verifier=verifier,
         auth=AuthSettings(
             issuer_url="https://auth.example.com", # 谁签发 token
             resource_server_url=resource, # token 发给谁，即 audience
             validate_token_resource=True,
-            required_scopes=["talent:read"],
+            required_scopes=["product:read"],
         ),
     )
     transport = httpx2.ASGITransport(app=server.streamable_http_app())
@@ -234,10 +247,10 @@ async def verify_langgraph(server) -> dict[str, object]:
                             content="",
                             tool_calls=[
                                 {
-                                    "name": "filter_candidates",
+                                    "name": "filter_products",
                                     "args": {
                                         "filters": [
-                                            {"field": "region", "operator": "eq", "value": "上海"}
+                                            {"field": "region", "operator": "eq", "value": "US"}
                                         ]
                                     },
                                     "id": "verify-13",
@@ -252,7 +265,7 @@ async def verify_langgraph(server) -> dict[str, object]:
             payload = tool_message.artifact["structured_content"]
             return {
                 "discovered_tools": [tool.name for tool in tools],
-                "candidate_ids": payload["data"],
+                "sku_ids": payload["data"],
                 "tool_status": tool_message.status,
             }
     finally:
@@ -261,9 +274,9 @@ async def verify_langgraph(server) -> dict[str, object]:
 
 
 async def main() -> None:
-    with TemporaryDirectory(prefix="talent-mcp-") as directory:
-        service = build_demo_service(Path(directory) / "talent.db")
-        server = build_talent_mcp_server(
+    with TemporaryDirectory(prefix="product-mcp-") as directory:
+        service = build_demo_service(Path(directory) / "product.db")
+        server = build_product_mcp_server(
             service,
             ToolExecutor(),
             context_provider=demo_context,

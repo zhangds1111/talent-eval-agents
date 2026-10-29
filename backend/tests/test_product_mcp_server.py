@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
 import json
 from pathlib import Path
 import subprocess
@@ -18,58 +17,18 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.models import Base, EmployeeProfile, JobDescription
-from app.talent_mcp_server import (
-    authenticated_talent_context,
-    build_talent_mcp_server,
-    talent_context_from_token,
+from app.product_mcp_server import (
+    authenticated_product_context,
+    build_product_mcp_server,
+    product_context_from_token,
 )
 from app.talent_tools import TalentToolContext, TalentToolService, ToolExecutor
-from scripts.verify_talent_mcp import build_demo_service, verify_auth
+from scripts.verify_product_mcp import build_demo_service, seed_demo_products, verify_auth
 
 
 def _session_factory(tmp_path):
-    engine = create_engine(f"sqlite:///{tmp_path / 'talent-mcp.db'}")
-    Base.metadata.create_all(engine)
-    with Session(engine) as db:
-        db.add_all(
-            [
-                JobDescription(
-                    job_code="JD-AI-001",
-                    tenant_id="tenant-a",
-                    name="高级 AI 应用工程师",
-                    content="负责企业知识库与 Agent 应用建设",
-                    version=2,
-                ),
-                JobDescription(
-                    job_code="JD-AI-OTHER",
-                    tenant_id="tenant-b",
-                    name="高级 AI 应用工程师",
-                    content="其他租户数据",
-                    version=1,
-                ),
-                EmployeeProfile(
-                    employee_no="C001",
-                    tenant_id="tenant-a",
-                    name="林晓岚",
-                    birth_date=date(1993, 5, 1),
-                    region="上海",
-                    current_position="AI 应用工程师",
-                    job_level="L3",
-                    years_of_experience=7,
-                    department="技术中心",
-                ),
-                EmployeeProfile(
-                    employee_no="C002",
-                    tenant_id="tenant-b",
-                    name="越权数据",
-                    region="上海",
-                    job_level="L4",
-                    years_of_experience=9,
-                ),
-            ]
-        )
-        db.commit()
+    engine = create_engine(f"sqlite:///{tmp_path / 'product-mcp.db'}")
+    seed_demo_products(engine)
 
     def factory():
         return Session(engine)
@@ -100,10 +59,10 @@ def _server(tmp_path):
         session_factory=_session_factory(tmp_path),
         evidence_provider=evidence_provider,
     )
-    return build_talent_mcp_server(service, ToolExecutor(), context_provider=_context)
+    return build_product_mcp_server(service, ToolExecutor(), context_provider=_context)
 
 
-def test_server_advertises_talent_tools_resources_and_prompt(tmp_path):
+def test_server_advertises_product_tools_resources_and_prompt(tmp_path):
     async def scenario():
         async with Client(_server(tmp_path)) as client:
             tools = await client.list_tools()
@@ -115,45 +74,53 @@ def test_server_advertises_talent_tools_resources_and_prompt(tmp_path):
     tools, resources, templates, prompts = anyio.run(scenario)
 
     assert {item.name for item in tools.tools} == {
-        "lookup_job_descriptions",
-        "filter_candidates",
-        "search_candidate_evidence",
-        "get_candidate_profiles",
+        "filter_products",
+        "search_product_evidence",
+        "get_product_profiles",
+        "check_product_compliance",
     }
-    assert {str(item.uri) for item in resources.resources} == {"talent://policies/evaluation/current"}
-    assert {item.uri_template for item in templates.resource_templates} == {
-        "talent://jobs/{job_code}",
-        "talent://candidates/{candidate_id}/profile",
-    }
-    assert [item.name for item in prompts.prompts] == ["talent_assessment"]
+    assert {str(item.uri) for item in resources.resources} == {"product://policies/certification-rules"}
+    assert {item.uri_template for item in templates.resource_templates} == {"product://skus/{sku_id}/profile"}
+    assert [item.name for item in prompts.prompts] == ["product_assessment"]
 
 
 def test_mcp_tools_reuse_existing_service_and_result_protocol(tmp_path):
     async def scenario():
         async with Client(_server(tmp_path)) as client:
-            job = await client.call_tool("lookup_job_descriptions", {"query": "AI 应用工程师"})
-            candidates = await client.call_tool(
-                "filter_candidates",
-                {"filters": [{"field": "region", "operator": "eq", "value": "上海"}]},
+            skus = await client.call_tool(
+                "filter_products",
+                {"filters": [
+                    {"field": "region", "operator": "eq", "value": "美国"},
+                    {"field": "gross_margin_percent", "operator": "gte", "value": 40},
+                ]},
             )
-            profiles = await client.call_tool("get_candidate_profiles", {"candidate_ids": ["C001", "C002"]})
-            return job, candidates, profiles
+            profiles = await client.call_tool("get_product_profiles", {"sku_ids": ["SKU-DEMO-001", "SKU-OTHER-001"]})
+            compliance = await client.call_tool(
+                "check_product_compliance", {"sku_ids": ["SKU-DEMO-001", "SKU-OTHER-001"]}
+            )
+            return skus, profiles, compliance
 
-    job, candidates, profiles = anyio.run(scenario)
+    skus, profiles, compliance = anyio.run(scenario)
 
-    assert job.is_error is False
-    assert job.structured_content["ok"] is True
-    assert job.structured_content["data"][0]["job_code"] == "JD-AI-001"
-    assert candidates.structured_content["data"] == ["C001"]
-    assert [item["candidate_id"] for item in profiles.structured_content["data"]] == ["C001"]
+    assert skus.is_error is False
+    assert skus.structured_content["data"] == ["SKU-DEMO-001"]
+    assert [item["candidate_id"] for item in profiles.structured_content["data"]] == ["SKU-DEMO-001"]
+    facts = compliance.structured_content["data"]
+    assert [item["candidate_id"] for item in facts] == ["SKU-DEMO-001"]  # 越权 SKU 不返回
+    assert facts[0]["unit_economics"]["gross_margin_percent"] == 45.0
+    assert {c["certification"]: c["status"] for c in facts[0]["certification_checks"]} == {
+        "FCC Part 15": "missing",
+        "UN38.3": "evidenced",
+    }
+    assert facts[0]["certification_gap_count"] == 1
 
 
-def test_evidence_tool_preserves_candidate_evidence_pack_v2(tmp_path):
+def test_evidence_tool_preserves_evidence_pack_v2(tmp_path):
     async def scenario():
         async with Client(_server(tmp_path)) as client:
             return await client.call_tool(
-                "search_candidate_evidence",
-                {"query": "企业知识库经验", "candidate_ids": ["C001"]},
+                "search_product_evidence",
+                {"query": "FCC 检测报告", "sku_ids": ["SKU-DEMO-001"]},
             )
 
     result = anyio.run(scenario)
@@ -162,48 +129,40 @@ def test_evidence_tool_preserves_candidate_evidence_pack_v2(tmp_path):
     assert result.structured_content["data"]["evidence_packs"][0]["schema_version"] == "2.0"
 
 
-def test_resource_templates_apply_the_same_tenant_boundary(tmp_path):
+def test_resources_apply_the_same_tenant_boundary(tmp_path):
     async def scenario():
         async with Client(_server(tmp_path)) as client:
-            job = await client.read_resource("talent://jobs/JD-AI-001")
-            profile = await client.read_resource("talent://candidates/C001/profile")
+            profile = await client.read_resource("product://skus/SKU-DEMO-001/profile")
+            rules = await client.read_resource("product://policies/certification-rules")
             with pytest.raises(MCPError):
-                await client.read_resource("talent://jobs/JD-AI-OTHER")
-            with pytest.raises(MCPError):
-                await client.read_resource("talent://candidates/C002/profile")
-            return job, profile
+                await client.read_resource("product://skus/SKU-OTHER-001/profile")
+            return profile, rules
 
-    job, profile = anyio.run(scenario)
-    job_content = job.contents[0]
-    profile_content = profile.contents[0]
+    profile, rules = anyio.run(scenario)
 
-    assert isinstance(job_content, TextResourceContents)
-    assert json.loads(job_content.text)["job_code"] == "JD-AI-001"
-    assert isinstance(profile_content, TextResourceContents)
-    assert json.loads(profile_content.text)["candidate_id"] == "C001"
+    assert isinstance(profile.contents[0], TextResourceContents)
+    assert json.loads(profile.contents[0].text)["candidate_id"] == "SKU-DEMO-001"
+    assert {item["certification"] for item in json.loads(rules.contents[0].text)} == {"FCC Part 15", "UN38.3"}
 
 
-def test_prompt_renders_user_selected_talent_request(tmp_path):
+def test_prompt_renders_product_request(tmp_path):
     async def scenario():
         async with Client(_server(tmp_path)) as client:
-            return await client.get_prompt(
-                "talent_assessment",
-                {"job_code": "JD-AI-001", "request_text": "筛选上海候选人"},
-            )
+            return await client.get_prompt("product_assessment", {"request_text": "美国站露营灯，毛利不低于 40%"})
 
     result = anyio.run(scenario)
 
     assert result.messages[0].role == "user"
-    assert "JD-AI-001" in result.messages[0].content.text
-    assert "筛选上海候选人" in result.messages[0].content.text
+    assert "美国站露营灯" in result.messages[0].content.text
+    assert "check_product_compliance" in result.messages[0].content.text
 
 
-def test_access_token_claims_become_trusted_talent_context():
+def test_access_token_claims_become_trusted_product_context():
     token = AccessToken(
         token="course-token",
-        client_id="talent-chat",
+        client_id="product-chat",
         subject="teacher-demo",
-        scopes=["talent:read"],
+        scopes=["product:read"],
         resource="http://127.0.0.1:18081/mcp",
         claims={
             "tenant_id": "tenant-a",
@@ -212,7 +171,7 @@ def test_access_token_claims_become_trusted_talent_context():
         },
     )
 
-    context = talent_context_from_token(token)
+    context = product_context_from_token(token)
 
     assert context == TalentToolContext(
         tenant_id="tenant-a",
@@ -233,13 +192,13 @@ def test_access_token_claims_become_trusted_talent_context():
 def test_access_token_requires_tenant_and_data_permissions(claims, message):
     token = AccessToken(
         token="course-token",
-        client_id="talent-chat",
-        scopes=["talent:read"],
+        client_id="product-chat",
+        scopes=["product:read"],
         claims=claims,
     )
 
     with pytest.raises(PermissionError, match=message):
-        talent_context_from_token(token)
+        product_context_from_token(token)
 
 
 class _TokenVerifier:
@@ -255,38 +214,38 @@ def _protected_server(tmp_path):
     tokens = {
         "valid": AccessToken(
             token="valid",
-            client_id="talent-chat",
+            client_id="product-chat",
             subject="teacher-demo",
-            scopes=["talent:read"],
+            scopes=["product:read"],
             resource=resource,
             claims={"tenant_id": "tenant-a", "permission_scopes": ["hr_private"], "run_id": "run-13"},
         ),
         "missing-scope": AccessToken(
             token="missing-scope",
-            client_id="talent-chat",
+            client_id="product-chat",
             scopes=[],
             resource=resource,
             claims={"tenant_id": "tenant-a", "permission_scopes": ["hr_private"]},
         ),
         "wrong-audience": AccessToken(
             token="wrong-audience",
-            client_id="talent-chat",
-            scopes=["talent:read"],
+            client_id="product-chat",
+            scopes=["product:read"],
             resource="https://other.example.com/mcp",
             claims={"tenant_id": "tenant-a", "permission_scopes": ["hr_private"]},
         ),
     }
     service = TalentToolService(session_factory=_session_factory(tmp_path))
-    server = build_talent_mcp_server(
+    server = build_product_mcp_server(
         service,
         ToolExecutor(),
-        context_provider=authenticated_talent_context,
+        context_provider=authenticated_product_context,
         token_verifier=_TokenVerifier(tokens),
         auth=AuthSettings(
             issuer_url="https://auth.example.com",
             resource_server_url=resource,
             validate_token_resource=True,
-            required_scopes=["talent:read"],
+            required_scopes=["product:read"],
         ),
     )
     return server, resource
@@ -328,14 +287,14 @@ def test_streamable_http_token_claims_reach_business_service(tmp_path):
             ) as http_client:
                 async with Client(streamable_http_client(resource, http_client=http_client)) as client:
                     return await client.call_tool(
-                        "get_candidate_profiles",
-                        {"candidate_ids": ["C001", "C002"]},
+                        "get_product_profiles",
+                        {"sku_ids": ["SKU-DEMO-001", "SKU-OTHER-001"]},
                     )
 
     result = anyio.run(scenario)
 
     assert result.is_error is False
-    assert [item["candidate_id"] for item in result.structured_content["data"]] == ["C001"]
+    assert [item["candidate_id"] for item in result.structured_content["data"]] == ["SKU-DEMO-001"]
 
 
 def test_verify_auth_uses_valid_capability_discovery_for_true_audience(tmp_path):
@@ -352,10 +311,10 @@ def test_verify_auth_uses_valid_capability_discovery_for_true_audience(tmp_path)
 
 
 def test_demo_http_server_exposes_tools_over_streamable_http(tmp_path):
-    from scripts.run_talent_mcp_http import build_demo_http_server
+    from scripts.run_product_mcp_http import build_demo_http_server
 
     async def scenario():
-        server = build_demo_http_server(tmp_path / "talent-http.db")
+        server = build_demo_http_server(tmp_path / "product-http.db")
         transport = httpx2.ASGITransport(app=server.streamable_http_app(stateless_http=True))
         async with server.session_manager.run():
             async with httpx2.AsyncClient(
@@ -373,15 +332,15 @@ def test_demo_http_server_exposes_tools_over_streamable_http(tmp_path):
     result = anyio.run(scenario)
 
     assert {tool.name for tool in result.tools} == {
-        "lookup_job_descriptions",
-        "filter_candidates",
-        "search_candidate_evidence",
-        "get_candidate_profiles",
+        "filter_products",
+        "search_product_evidence",
+        "get_product_profiles",
+        "check_product_compliance",
     }
 
 
 def test_demo_http_server_script_can_run_directly():
-    script = Path(__file__).resolve().parents[1] / "scripts" / "run_talent_mcp_http.py"
+    script = Path(__file__).resolve().parents[1] / "scripts" / "run_product_mcp_http.py"
 
     result = subprocess.run(
         [sys.executable, str(script), "--help"],
@@ -396,18 +355,18 @@ def test_demo_http_server_script_can_run_directly():
 
 
 def test_demo_http_server_stops_cleanly_on_keyboard_interrupt(monkeypatch, capsys):
-    from scripts import run_talent_mcp_http
+    from scripts import run_product_mcp_http
 
     class StoppedServer:
         def run(self, *args, **kwargs):
             raise KeyboardInterrupt
 
     monkeypatch.setattr(
-        run_talent_mcp_http,
+        run_product_mcp_http,
         "build_demo_http_server",
         lambda database_path: StoppedServer(),
     )
 
-    run_talent_mcp_http.main([])
+    run_product_mcp_http.main([])
 
-    assert "Talent MCP 已停止" in capsys.readouterr().out
+    assert "Product MCP 已停止" in capsys.readouterr().out
