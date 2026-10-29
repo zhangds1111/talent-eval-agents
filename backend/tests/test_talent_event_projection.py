@@ -13,7 +13,6 @@ def test_actual_request_node_projects_only_safe_business_fields():
                 "original_text": "sensitive raw request",
                 "task_type": "evaluate_and_recommend",
                 "source": "natural_language",
-                "target_job": None,
                 "hard_conditions": [{"field": "region", "operator": "eq", "value": "上海"}],
                 "semantic_conditions": [{"text": "Agent 评测"}],
                 "evaluation_preferences": {"top_k": 5},
@@ -41,8 +40,7 @@ def test_actual_request_node_projects_only_safe_business_fields():
                     "talent_request": {
                         "task_type": "evaluate_and_recommend",
                         "source": "natural_language",
-                        "target_job": None,
-                        "hard_conditions": [
+                                "hard_conditions": [
                             {"field": "region", "operator": "eq", "value": "上海"}
                         ],
                         "semantic_conditions": [{"text": "Agent 评测"}],
@@ -62,39 +60,6 @@ def test_actual_request_node_projects_only_safe_business_fields():
         }
     ]
     assert "sensitive raw request" not in str(projected)
-
-
-def test_langgraph_interrupt_object_projects_job_options():
-    projected = project_graph_update(
-        namespace=("request_subgraph:task-1",),
-        node="__interrupt__",
-        update=(
-            Interrupt(
-                value={
-                    "type": "job_selection",
-                    "question": "请选择本次人才评估使用的岗位 JD",
-                    "options": [
-                        {"job_code": "JD-AI-001", "name": "高级 AI 应用工程师"}
-                    ],
-                },
-                id="interrupt-1",
-            ),
-        ),
-    )
-
-    assert projected == [
-        {
-            "type": "hitl.required",
-            "data": {
-                "interaction_type": "job_selection",
-                "title": "确认岗位",
-                "description": "请选择本次人才评估使用的岗位 JD",
-                "options": [
-                    {"value": "JD-AI-001", "label": "高级 AI 应用工程师"}
-                ],
-            },
-        }
-    ]
 
 
 def test_requirement_revision_interrupt_keeps_real_reason_and_editable_text():

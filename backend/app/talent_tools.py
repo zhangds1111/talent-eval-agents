@@ -5,7 +5,6 @@ import time
 from contextvars import copy_context
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
-from difflib import SequenceMatcher
 from threading import Lock
 from typing import Annotated, Any, Callable
 from uuid import uuid4
@@ -15,7 +14,7 @@ from pydantic import Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import EmployeeProfile, JobDescription, ToolCallAudit
+from app.models import EmployeeProfile, ToolCallAudit
 from app.query_plan import FilterCondition, QueryPlan, TaskType, select_candidate_ids
 
 logger = logging.getLogger(__name__)
@@ -247,68 +246,6 @@ class TalentToolService:
         if not context.permission_scopes:
             raise PermissionError("缺少可用权限范围")
 
-    def lookup_job_descriptions(
-        self,
-        query: str,
-        *,
-        context: TalentToolContext,
-        limit: int = 5,
-    ) -> list[dict[str, Any]]:
-        self._check_context(context)
-        normalized_query = "".join(query.lower().split())
-        if not normalized_query:
-            raise ValueError("岗位名称不能为空")
-        with self.session_factory() as db:
-            rows = db.scalars(
-                select(JobDescription).where(
-                    JobDescription.tenant_id == context.tenant_id,
-                    JobDescription.status == "active",
-                )
-            ).all()
-        matches = []
-        for row in rows:
-            normalized_name = "".join(row.name.lower().split())
-            if normalized_query == normalized_name:
-                match_type = "exact"
-                score = 1.0
-            elif normalized_query in normalized_name or normalized_name in normalized_query:
-                match_type = "contains"
-                score = 1.0
-            else:
-                match_type = "fuzzy"
-                score = round(SequenceMatcher(None, normalized_query, normalized_name).ratio(), 4)
-            if score >= 0.3:
-                matches.append(
-                    {
-                        "job_code": row.job_code,
-                        "name": row.name,
-                        "match_score": score,
-                        "match_type": match_type,
-                        "version": row.version,
-                        "content": row.content,
-                    }
-                )
-        return sorted(matches, key=lambda item: (-item["match_score"], item["job_code"]))[:limit]
-
-    def get_job_description(self, job_code: str, *, context: TalentToolContext) -> dict[str, Any] | None:
-        self._check_context(context)
-        with self.session_factory() as db:
-            row = db.scalar(
-                select(JobDescription).where(
-                    JobDescription.job_code == job_code,
-                    JobDescription.tenant_id == context.tenant_id,
-                    JobDescription.status == "active",
-                )
-            )
-        if row is None:
-            return None
-        return {
-            "job_code": row.job_code,
-            "name": row.name,
-            "version": row.version,
-            "content": row.content,
-        }
-
     def filter_candidates(self, filters: list[FilterCondition], *, context: TalentToolContext) -> list[str]:
         self._check_context(context)
         plan = QueryPlan(task_type=TaskType.FIND_TALENT, filters=filters)
@@ -395,25 +332,11 @@ class TalentToolService:
 
 def build_talent_tools(service: TalentToolService, executor: ToolExecutor):
     @tool
-    def lookup_job_descriptions(
-        query: Annotated[str, Field(min_length=1, max_length=200)],
-        runtime: ToolRuntime[TalentToolContext],
-        limit: Annotated[int, Field(ge=1, le=10)] = 5,
-    ):
-        """按岗位名称查询企业已经维护的岗位 JD，不生成或补写岗位要求。"""
-        return executor.execute(
-            "lookup_job_descriptions",
-            lambda: service.lookup_job_descriptions(query, limit=limit, context=runtime.context),
-            context=runtime.context,
-            arguments={"query": query, "limit": limit},
-        )
-
-    @tool
     def filter_candidates(
         filters: Annotated[list[FilterCondition], Field(max_length=20)],
         runtime: ToolRuntime[TalentToolContext],
     ):
-        """按地区、职级、年限等结构化条件筛选授权租户内的候选人。"""
+        """按目标市场、品类、售价、毛利率等结构化条件筛选授权租户内的在售 SKU。"""
         return executor.execute(
             "filter_candidates", lambda: service.filter_candidates(filters, context=runtime.context),
             context=runtime.context, arguments={"filters": filters},
@@ -425,7 +348,7 @@ def build_talent_tools(service: TalentToolService, executor: ToolExecutor):
         candidate_ids: Annotated[list[str], Field(min_length=1, max_length=100)],
         runtime: ToolRuntime[TalentToolContext],
     ):
-        """在给定候选人范围内检索材料证据并返回 Candidate Evidence Pack 2.0。"""
+        """在给定 SKU 范围内检索商品材料证据并返回 Evidence Pack 2.0。"""
         return executor.execute(
             "search_candidate_evidence",
             lambda: service.search_candidate_evidence(query, candidate_ids, context=runtime.context),
@@ -437,14 +360,14 @@ def build_talent_tools(service: TalentToolService, executor: ToolExecutor):
         candidate_ids: Annotated[list[str], Field(min_length=1, max_length=100)],
         runtime: ToolRuntime[TalentToolContext],
     ):
-        """批量读取授权租户内候选人的结构化基础信息，用于评估取证。"""
+        """批量读取授权租户内 SKU 的结构化基础信息，用于评估取证。"""
         return executor.execute(
             "get_candidate_profiles",
             lambda: service.get_candidate_profiles(candidate_ids, context=runtime.context),
             context=runtime.context, arguments={"candidate_ids": candidate_ids},
         )
 
-    return [lookup_job_descriptions, filter_candidates, search_candidate_evidence, get_candidate_profiles]
+    return [filter_candidates, search_candidate_evidence, get_candidate_profiles]
 
 
 def build_candidate_provider(

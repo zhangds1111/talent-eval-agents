@@ -536,18 +536,6 @@ class TalentRunManager:
         value: str,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         interaction_type = payload.get("type")
-        if interaction_type == "job_selection":
-            options = {
-                str(item.get("job_code")): str(item.get("name"))
-                for item in payload.get("options", [])
-                if isinstance(item, dict) and item.get("job_code")
-            }
-            if value not in options:
-                raise ValueError("请选择有效的候选商品")
-            return (
-                {"action": "select", "job_code": value},
-                {"interaction_type": interaction_type, "value": value, "label": options[value]},
-            )
         if interaction_type == "requirement_revision":
             if not value:
                 raise ValueError("修订后的选品条件不能为空")

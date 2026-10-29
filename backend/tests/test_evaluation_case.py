@@ -12,7 +12,6 @@ from app.evaluation_case import (
 def test_first_evaluation_modules_are_closed_and_explicit():
     assert {item.value for item in EvaluationModule} == {
         "request_understanding",
-        "job_matching",
         "dimension_generation",
         "fact_extraction",
     }

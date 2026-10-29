@@ -28,7 +28,7 @@
 
 本阶段把人才评估链路最小改动地切换到「跨境电商选品评估」场景：不改数据库表结构，暂借现有表与字段承载选品数据（`employee_profiles` 表存候选商品，`employee_no` → SKU 编号、`region` → 目标市场、`department` → 品类、`current_position` → 商品子类），内部键名保持不变。
 
-**本阶段不设选品模板**：需求理解阶段直接把用户自然语言需求（目标市场、渠道、品类、售价、毛利、认证偏好、评分等）编译成 `QueryPlan` 去筛选 SKU，`input_mode` 一律为 `detailed_requirement`，因此路由直接走 `build_plan`，跳过 `lookup_jobs` 与确认岗位的 interrupt（图结构未重构，人才模式的岗位确认分支与相关测试保持可用）。当筛出 0 个候选商品、或条件歧义/冲突导致查询计划不可执行时，仍会通过 interrupt 暂停，让用户修订选品条件或取消。
+**本阶段不设选品模板**：需求理解阶段直接把用户自然语言需求（目标市场、渠道、品类、售价、毛利、认证偏好、评分等）编译成 `QueryPlan` 去筛选 SKU，`input_mode` 固定为 `detailed_requirement`，直接走 `build_plan`；人才版的岗位查询与确认岗位分支已删除（见第 14 课一节）。当筛出 0 个候选商品、或条件歧义/冲突导致查询计划不可执行时，仍会通过 interrupt 暂停，让用户修订选品条件或取消。
 
 必需认证的校验说明：**本阶段不设选品模板，也不要求系统在需求理解时推断必需认证**；各 SKU 是否有认证由证据抽取与评估维度基于材料回答（报告只写「有证据/缺证据」，不下「合规」结论）。「市场×品类 → 必需认证」的规则表将在后续阶段实现，届时再由规则驱动必需的认证维度。
 
@@ -313,7 +313,7 @@ uv run --no-sync pytest -q tests/test_talent_decision_graph.py
 | `backend/samples/lesson12/job_descriptions.json` | 第 12 课合成岗位 JD 数据 |
 | `database/migrations/012_talent_tools.sql` | 新增 `job_descriptions` 与 `tool_call_audits` |
 
-工具清单为 `lookup_job_descriptions`、`filter_candidates`、`search_candidate_evidence` 和 `get_candidate_profiles`。模型可见 Schema 只包含业务参数，租户、权限、身份和 Run 编号通过 `ToolRuntime` 注入。结构化筛选复用第 8 课 Query Plan 与 SQL Builder，证据检索继续返回第 9 课 Candidate Evidence Pack `2.0`
+工具清单为 `filter_candidates`、`search_candidate_evidence` 和 `get_candidate_profiles`（选品模式已移除岗位查询工具）。模型可见 Schema 只包含业务参数，租户、权限、身份和 Run 编号通过 `ToolRuntime` 注入。结构化筛选复用第 8 课 Query Plan 与 SQL Builder，证据检索继续返回第 9 课 Candidate Evidence Pack `2.0`
 
 `ToolExecutor` 统一返回 `ok`、`data`、`error` 和 `meta`，仅对瞬时依赖错误与超时执行受控重试。`policy` 设置默认超时与重试参数，`tool_policies` 可以按工具名称覆盖。连续失败达到阈值后打开熔断器。`SqlAuditSink` 只保存参数键名与调用摘要，不保存查询原文、候选人信息或证据正文
 
@@ -356,16 +356,16 @@ uv run --no-sync pytest -q tests/test_talent_tools.py tests/test_talent_decision
 | `backend/scripts/verify_product_mcp.py` | 使用隔离 SQLite 数据启动 Streamable HTTP，验证协议、鉴权和 LangGraph 链路 |
 | `backend/scripts/run_product_mcp_http.py` | 长驻启动无鉴权的本机 Streamable HTTP Demo Server，供 Inspector 和其他 Host 联调 |
 
-MCP 适配层直接复用第 12 课的 `TalentToolService` 和 `ToolExecutor`。`talent_tools.py` 只新增了按 `job_code` 读取单个岗位 JD 的方法，且 SQL 继续强制使用可信 `tenant_id`
+MCP 适配层直接复用第 12 课的 `TalentToolService` 和 `ToolExecutor`。`talent_tools.py` 新增 `check_product_compliance`（调用 `product_compliance.py` 程序核算）与 `list_certification_rules`，SQL 继续强制使用可信 `tenant_id`
 
 Server 能力清单：
 
-- Tools：`lookup_job_descriptions`、`filter_candidates`、`search_candidate_evidence`、`get_candidate_profiles`
-- Resource Templates：`talent://jobs/{job_code}`、`talent://candidates/{candidate_id}/profile`
-- 固定 Resource：`talent://policies/evaluation/current`
-- Prompt：`talent_assessment`
+- Tools：`filter_products`、`search_product_evidence`、`get_product_profiles`、`check_product_compliance`
+- Resource Templates：`product://skus/{sku_id}/profile`
+- 固定 Resource：`product://policies/certification-rules`
+- Prompt：`product_assessment`
 
-Streamable HTTP 保护边界使用 MCP `AuthSettings` 与可注入 `TokenVerifier`。OAuth scope `talent:read` 决定客户端能否访问 MCP 服务，token claims 中的 `tenant_id` 和 `permission_scopes` 映射为 `TalentToolContext`。工具参数与 `clientInfo` 不参与可信身份判定
+Streamable HTTP 保护边界使用 MCP `AuthSettings` 与可注入 `TokenVerifier`。OAuth scope `product:read` 决定客户端能否访问 MCP 服务，token claims 中的 `tenant_id` 和 `permission_scopes` 映射为 `TalentToolContext`。工具参数与 `clientInfo` 不参与可信身份判定
 
 本节新增直接依赖 `mcp[cli]>=2.2,<3`、`langchain[mcp]>=1.4,<2` 和 `langchain-core>=1.2,<2`。`MCPAdapter` 在当前 LangChain 版本中仍为 Beta API，升级后需运行本节回归测试
 
@@ -425,71 +425,32 @@ uv run --no-sync pytest -q tests/test_codestats_mcp_v2.py tests/test_talent_mcp_
 
 结果输出为 `38 passed in 2.05s`。后端完整回归结果为 `177 passed, 2 warnings in 6.69s`
 
-## 第 14 课人才任务理解、条件澄清与执行计划
+## 第 14 课选品需求理解、条件澄清与执行计划
 
 | 路径 | 用途 |
 |---|---|
-| `backend/app/talent_request_graph.py` | 区分详细要求与岗位名称，完成岗位确认、统一要求修订和执行计划编译 |
-| `backend/app/lesson14_demo_data.py` | 按 `job_code` 幂等写入课程演示岗位 |
-| `backend/app/talent_tools.py` | 岗位查询结果增加 `exact`、`contains`、`fuzzy` 匹配类型 |
+| `backend/app/talent_request_graph.py` | 把自然语言选品需求编译为结构化条件与执行计划，歧义或 0 结果时统一进入要求修订 |
 | `backend/langgraph.json` | 为本地 Agent Server 注册 `talent_request` 图 |
-| `backend/samples/lesson14/job_descriptions.json` | 2 条 `course-demo` 岗位与 1 条跨租户隔离岗位 |
-| `backend/scripts/seed_lesson14_jobs.py` | 将演示岗位导入项目 PostgreSQL |
-| `backend/scripts/verify_talent_request_graph.py` | 用固定解释器、岗位结果和 `InMemorySaver` 验证三条运行路径 |
-| `backend/tests/test_lesson14_demo_data.py` | 验证演示数据导入的插入、更新和幂等性 |
-| `backend/tests/test_talent_request_graph.py` | 验证详细要求直达、精确项直达、歧义岗位恢复和无匹配结果 |
+| `backend/tests/test_talent_request_graph.py` | 验证需求直达执行计划与歧义需求的澄清 |
 
-详细人才要求直接编译为 `TalentRequest` 与第 8 课的 `QueryPlan`。岗位名称先调用 `lookup_job_descriptions`，唯一 `exact` 项自动确认，只有 `contains` 或 `fuzzy` 候选时进入 `confirm_job`。中断载荷包含 `type`、问题、原始请求和岗位选项，恢复值使用 `{"action":"select","job_code":"..."}`
+选品模式没有岗位 JD 或选品模板：原人才版的「岗位名称 → 查询岗位 JD → 确认岗位（`confirm_job` interrupt）」分支已删除，相关表 `job_descriptions` 由迁移 `026_drop_job_descriptions.sql` 删除。图结构为 `receive_request → interpret_input → build_plan →（filter_candidates / resolve_requirements）`。
 
-第 17 课在候选人筛选启用时增加统一的 `resolve_requirements` 节点。计划无法执行或候选集为空都会返回 `requirement_revision` 载荷，前端使用载荷中的完整 `request_text` 初始化编辑框，用户通过 `revision_text` 提交修改后的完整要求。节点直接覆盖当前 `request_text`，再回到 `interpret_input` 重新生成草稿和查询计划。岗位非精确匹配支持选择或取消，岗位无匹配以 `no_job_match` 终态结束
+候选商品筛选启用时，计划无法执行或候选集为空都会进入统一的 `resolve_requirements` 节点，返回 `requirement_revision` 载荷；前端用载荷中的完整 `request_text` 初始化编辑框，用户通过 `revision_text` 提交修改后的完整需求，节点回到 `interpret_input` 重新生成草稿和查询计划，也可以取消。租户与权限由 `DecisionContext` 注入，不进入模型生成的结构化需求或 `QueryPlan`。
 
-岗位查询和 `interrupt()` 位于两个节点。恢复会从 `confirm_job` 开头重启，但不会再次执行已经完成的 `lookup_jobs`。租户与权限仍由 `DecisionContext` 注入，不进入模型生成的 `TalentRequest` 或 `QueryPlan`
-
-本节新增开发依赖 `langgraph-cli[inmem]>=0.4.31,<0.5` 和 `debugpy`。Agent Server 从 `backend/langgraph.json` 加载图，并在开发态管理 Checkpoint
-
-导入合成岗位数据：
+本地 Studio 演示：
 
 ```bash
 cd backend
-uv run --no-sync python -m scripts.seed_lesson14_jobs
-```
-
-首次输出为 `{"inserted": 3, "updated": 0, "total": 3}`，重复运行输出为 `{"inserted": 0, "updated": 3, "total": 3}`
-
-启动本地 Studio 演示：
-
-```bash
 uv run langgraph dev --no-browser --no-reload --port 2024
 ```
 
-服务健康检查返回 `{"ok":true}`，`/assistants/search` 返回 `graph_id=talent_request`。Studio 使用 Graph mode，Assistant Context 设置为 `tenant_id=course-demo` 和 `permission_scopes=["hr_private"]`
-
-断点调试 Agent Server：
-
-```bash
-uv run langgraph dev --no-browser --debug-port 5678 --wait-for-client --port 2024
-```
-
-在 VS Code 中选择 `Attach LangGraph dev (5678)`。`confirm_job` 的恢复值检查位于 `backend/app/talent_request_graph.py`，在 `interrupt()` 后一行设置断点可以检查 `selection` 的实际类型和值
-
-运行确定性验证：
-
-```bash
-uv run --no-sync python -m scripts.verify_talent_request_graph
-```
-
-歧义岗位路径先输出 `next=["confirm_job"]`，使用同一 `thread_id` 恢复后输出 `status=plan_ready`、`selected_job=JD-AI-002`、`next=[]` 和 `lookup_calls=1`
+Studio 使用 Graph mode，Assistant Context 设置为 `tenant_id=course-demo` 和 `permission_scopes=["hr_private"]`。
 
 运行本节定向测试：
 
 ```bash
-uv run --no-sync pytest -q \
-  tests/test_lesson14_demo_data.py \
-  tests/test_talent_request_graph.py \
-  tests/test_talent_tools.py
+uv run --no-sync pytest -q tests/test_talent_request_graph.py tests/test_talent_request_hitl.py tests/test_talent_tools.py
 ```
-
-结果输出为 `24 passed, 1 warning in 1.19s`。后端完整回归结果为 `174 passed, 2 warnings in 8.40s`
 
 ## 第 15 课动态评估维度与 Subagent 分发
 

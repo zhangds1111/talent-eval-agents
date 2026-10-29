@@ -5,7 +5,7 @@
 
 以下为第 1 阶段说明：
 
-表结构沿用人才评估阶段，本阶段不新增表、也不使用 job_descriptions：
+SKU 基础信息沿用 employee_profiles 表：
 - ``employee_profiles`` 暂存候选商品（employee_no → SKU、region → 目标市场、
   department → 品类、current_position → 子类），内部键名保持不变。
 - 选品模板概念已移除：需求理解阶段直接把用户自然语言需求编译成 QueryPlan 筛选 SKU。

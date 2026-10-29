@@ -85,7 +85,6 @@ def _project_step_output(node: str, update: dict[str, Any]) -> dict[str, Any]:
             (
                 "task_type",
                 "source",
-                "target_job",
                 "hard_conditions",
                 "semantic_conditions",
                 "evaluation_preferences",
@@ -123,20 +122,6 @@ def _project_step_output(node: str, update: dict[str, Any]) -> dict[str, Any]:
     return output
 
 
-def _job_selection(payload: dict[str, Any]) -> dict[str, Any]:
-    options = [
-        {"value": str(item["job_code"]), "label": str(item["name"])}
-        for item in payload.get("options", [])
-        if isinstance(item, dict) and item.get("job_code") and item.get("name")
-    ]
-    return {
-        "interaction_type": "job_selection",
-        "title": "确认岗位",
-        "description": str(payload.get("question", "请选择本次评估使用的岗位")),
-        "options": options,
-    }
-
-
 def _requirement_revision(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "interaction_type": "requirement_revision",
@@ -165,9 +150,7 @@ def project_graph_update(
         if payload is None:
             return []
         interaction_type = payload.get("type")
-        if interaction_type == "job_selection":
-            data = _job_selection(payload)
-        elif interaction_type == "requirement_revision":
+        if interaction_type == "requirement_revision":
             data = _requirement_revision(payload)
         else:
             data = {

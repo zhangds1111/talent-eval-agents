@@ -10,7 +10,7 @@ from langgraph.prebuilt import ToolNode
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from app.models import Base, EmployeeProfile, JobDescription, ToolCallAudit
+from app.models import Base, EmployeeProfile, ToolCallAudit
 from app.query_plan import FilterCondition
 from app.talent_decision_graph import DecisionContext, build_talent_decision_graph
 from app.talent_tools import (
@@ -34,27 +34,6 @@ def session_factory(tmp_path):
     with Session(engine) as db:
         db.add_all(
             [
-                JobDescription(
-                    job_code="JD-AI-001",
-                    tenant_id="tenant-a",
-                    name="高级 AI 应用工程师",
-                    content="负责企业知识库与 Agent 应用建设",
-                    version=2,
-                ),
-                JobDescription(
-                    job_code="JD-JAVA-001",
-                    tenant_id="tenant-a",
-                    name="Java 后端工程师",
-                    content="负责交易系统后端开发",
-                    version=1,
-                ),
-                JobDescription(
-                    job_code="JD-AI-OTHER",
-                    tenant_id="tenant-b",
-                    name="高级 AI 应用工程师",
-                    content="其他租户数据",
-                    version=1,
-                ),
                 EmployeeProfile(
                     employee_no="C001",
                     tenant_id="tenant-a",
@@ -92,43 +71,6 @@ def context():
         actor_id="teacher-demo",
         run_id="run-12",
     )
-
-
-def test_job_lookup_returns_tenant_scoped_ranked_matches(session_factory, context):
-    service = TalentToolService(session_factory=session_factory)
-
-    result = service.lookup_job_descriptions("AI 应用工程师", context=context)
-
-    assert result[0]["job_code"] == "JD-AI-001"
-    assert result[0]["version"] == 2
-    assert result[0]["match_score"] == 1.0
-    assert result[0]["match_type"] == "contains"
-    assert all(item["content"] != "其他租户数据" for item in result)
-
-
-def test_job_lookup_marks_normalized_equal_name_as_exact(session_factory, context):
-    service = TalentToolService(session_factory=session_factory)
-
-    result = service.lookup_job_descriptions(" 高级ai应用工程师 ", context=context)
-
-    assert result[0]["job_code"] == "JD-AI-001"
-    assert result[0]["match_score"] == 1.0
-    assert result[0]["match_type"] == "exact"
-
-
-def test_job_resource_lookup_uses_job_code_and_tenant_boundary(session_factory, context):
-    service = TalentToolService(session_factory=session_factory)
-
-    visible = service.get_job_description("JD-AI-001", context=context)
-    hidden = service.get_job_description("JD-AI-OTHER", context=context)
-
-    assert visible == {
-        "job_code": "JD-AI-001",
-        "name": "高级 AI 应用工程师",
-        "version": 2,
-        "content": "负责企业知识库与 Agent 应用建设",
-    }
-    assert hidden is None
 
 
 def test_candidate_filter_reuses_query_plan_and_tenant_boundary(session_factory, context):
@@ -174,9 +116,8 @@ def test_tool_schema_hides_runtime_context(session_factory):
     schemas = {item.name: item.tool_call_schema.model_json_schema() for item in tools}
 
     assert "context" not in str(schemas)
-    assert "runtime" not in schemas["lookup_job_descriptions"]["properties"]
+    assert "runtime" not in schemas["filter_candidates"]["properties"]
     assert set(schemas) == {
-        "lookup_job_descriptions",
         "filter_candidates",
         "search_candidate_evidence",
         "get_candidate_profiles",

@@ -16,7 +16,7 @@ def test_store_persists_real_module_invocations_in_postgres():
         turn_no=1,
         module_key=EvaluationModule.REQUEST_UNDERSTANDING,
         input_payload={"messages": [{"role": "human", "content": "寻找 AI 工程师"}]},
-        output_payload={"input_mode": "job_name", "job_query": "AI 工程师"},
+        output_payload={"input_mode": "detailed_requirement", "filters": []},
         replay_context={"tenant_id": "course-demo"},
         version_snapshot={"prompt": "request-understanding-v1"},
         duration_ms=12,

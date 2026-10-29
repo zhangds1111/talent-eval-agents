@@ -1,4 +1,4 @@
-"""第 19 课：使用真实数据、检索服务和模型验证 Run 与 SSE 投影链路。"""
+"""使用真实选品数据、检索服务和模型验证 Run 与 SSE 投影链路。"""
 
 from __future__ import annotations
 
@@ -10,26 +10,19 @@ from time import perf_counter
 from sqlalchemy import func, select
 
 from app.database import SessionLocal
-from app.models import Document, DocumentChunk, EmployeeProfile, JobDescription
+from app.models import Document, DocumentChunk, EmployeeProfile, ProductAttributes
 from app.talent_run_stream import RunStatus, TalentRunManager
 
 
 DEFAULT_QUESTION = (
-    "请按照岗位编号 JD-AI-001 为上海团队筛选高级 AI 应用工程师，要求至少 5 年开发经验，"
-    "并且做过企业知识库 RAG 项目。"
-    "请基于现有简历筛选最匹配的候选人，给出证据、风险和录用建议。"
-)
-DEFAULT_HITL_QUESTION = (
-    "我们准备启动 AI 应用工程师岗位的招聘，请先从系统中的岗位 JD 里找到对应岗位，"
-    "再基于岗位要求评估现有候选人，并给出证据、风险和录用建议"
+    "我要为美国 Amazon 站选一批户外照明产品（露营灯、头灯），带电产品需要提供 FCC 和 UN38.3 检测报告，"
+    "样品报价毛利率不低于 40%。请基于报价单、检测报告和用户评价给出候选商品的证据、风险与推荐结论"
 )
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="验证真实人才评估 Run 链路")
+    parser = argparse.ArgumentParser(description="验证真实选品评估 Run 链路")
     parser.add_argument("--question", default=DEFAULT_QUESTION)
-    parser.add_argument("--hitl-question", default=DEFAULT_HITL_QUESTION)
-    parser.add_argument("--job-code", default="JD-AI-001")
     parser.add_argument("--max-concurrency", type=int, default=6)
     return parser
 
@@ -37,68 +30,18 @@ def _parser() -> argparse.ArgumentParser:
 def _data_inventory() -> dict[str, int]:
     with SessionLocal() as db:
         return {
-            "employee_profiles": db.scalar(select(func.count()).select_from(EmployeeProfile)) or 0,
-            "job_descriptions": db.scalar(select(func.count()).select_from(JobDescription)) or 0,
+            "products": db.scalar(select(func.count()).select_from(EmployeeProfile)) or 0,
+            "product_attributes": db.scalar(select(func.count()).select_from(ProductAttributes)) or 0,
             "documents": db.scalar(select(func.count()).select_from(Document)) or 0,
             "document_chunks": db.scalar(select(func.count()).select_from(DocumentChunk)) or 0,
         }
 
 
-async def _verify_hitl(
-    manager: TalentRunManager,
-    question: str,
-    job_code: str,
-) -> dict[str, object]:
-    run = await manager.create_run(question)
-    cursor = 0
-    while manager.get_run(run.run_id).status == RunStatus.RUNNING:
-        await manager.wait_for_change(run.run_id, cursor, timeout=10)
-        events = manager.events_since(run.run_id, cursor)
-        if events:
-            cursor = events[-1].sequence
-    current = manager.get_run(run.run_id)
-    if current.status != RunStatus.WAITING_INPUT:
-        failure = next(
-            (
-                event.data.get("message")
-                for event in reversed(current.events)
-                if event.type == "run.failed"
-            ),
-            None,
-        )
-        raise AssertionError(
-            f"HITL Run 未进入等待状态: {current.status}; {failure}"
-        )
-    required = next(
-        (event for event in current.events if event.type == "hitl.required"),
-        None,
-    )
-    if required is None:
-        raise AssertionError("HITL Run 缺少 hitl.required")
-    await manager.resume_run(run.run_id, job_code)
-    resolved = next(
-        (event for event in current.events if event.type == "hitl.resolved"),
-        None,
-    )
-    if resolved is None or resolved.sequence != required.sequence + 1:
-        raise AssertionError("HITL 恢复事件未紧接中断事件")
-    await manager.cancel_run(run.run_id)
-    return {
-        "run_id": run.run_id,
-        "required_sequence": required.sequence,
-        "resolved_sequence": resolved.sequence,
-        "selected_job_code": job_code,
-    }
-
-
 async def verify(
     question: str,
-    hitl_question: str,
-    job_code: str,
     max_concurrency: int,
 ) -> dict[str, object]:
     manager = TalentRunManager(max_concurrency=max_concurrency)
-    hitl_result = await _verify_hitl(manager, hitl_question, job_code)
     started = perf_counter()
     run = await manager.create_run(question)
     cursor = 0
@@ -107,14 +50,6 @@ async def verify(
         events = manager.events_since(run.run_id, cursor)
         if events:
             cursor = events[-1].sequence
-
-    if manager.get_run(run.run_id).status == RunStatus.WAITING_INPUT:
-        await manager.resume_run(run.run_id, job_code)
-        while manager.get_run(run.run_id).status == RunStatus.RUNNING:
-            await manager.wait_for_change(run.run_id, cursor, timeout=10)
-            events = manager.events_since(run.run_id, cursor)
-            if events:
-                cursor = events[-1].sequence
 
     current = manager.get_run(run.run_id)
     events = manager.events_since(run.run_id, 0)
@@ -152,7 +87,6 @@ async def verify(
     if missing := required.difference(event_types):
         raise AssertionError(f"事件链路不完整: {sorted(missing)}")
     return {
-        "hitl": hitl_result,
         "evaluation_run_id": run.run_id,
         "status": current.status,
         "elapsed_seconds": round(perf_counter() - started, 2),
@@ -171,8 +105,6 @@ def main() -> None:
     result = asyncio.run(
         verify(
             args.question,
-            args.hitl_question,
-            args.job_code,
             args.max_concurrency,
         )
     )

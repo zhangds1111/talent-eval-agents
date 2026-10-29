@@ -22,7 +22,7 @@ class ConversationInterpreter:
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
 
-    def __call__(self, messages, previous_request, selected_job=None, conversation_title=""):
+    def __call__(self, messages, previous_request, conversation_title=""):
         texts = [str(message.content) for message in messages]
         latest = texts[-1]
         self.calls.append({"messages": texts, "previous_request": previous_request})
@@ -61,7 +61,6 @@ def test_same_thread_restores_messages_and_structured_request_for_add_update_rem
     interpreter = ConversationInterpreter()
     graph = build_talent_request_graph(
         request_interpreter=interpreter,
-        job_lookup=lambda query, context: [],
         checkpointer=InMemorySaver(),
     )
     config = {"configurable": {"thread_id": "conversation-1"}}
@@ -86,7 +85,7 @@ def test_same_thread_restores_messages_and_structured_request_for_add_update_rem
 
 def test_different_thread_has_isolated_message_history():
     interpreter = ConversationInterpreter()
-    graph = build_talent_request_graph(request_interpreter=interpreter, job_lookup=lambda query, context: [], checkpointer=InMemorySaver())
+    graph = build_talent_request_graph(request_interpreter=interpreter, checkpointer=InMemorySaver())
     graph.invoke({"messages": [HumanMessage(content="筛选上海人才")]}, {"configurable": {"thread_id": "conversation-a"}}, context=_context())
     graph.invoke({"messages": [HumanMessage(content="筛选北京人才")]}, {"configurable": {"thread_id": "conversation-b"}}, context=_context())
 
@@ -98,7 +97,6 @@ def test_request_interpreter_receives_current_turn_and_three_previous_turns():
     interpreter = ConversationInterpreter()
     graph = build_talent_request_graph(
         request_interpreter=interpreter,
-        job_lookup=lambda query, context: [],
         checkpointer=InMemorySaver(),
     )
     config = {"configurable": {"thread_id": "conversation-window"}}
@@ -125,15 +123,15 @@ def test_parent_passes_previous_request_and_preserves_title_across_four_turns():
     interpreter = ConversationInterpreter()
     titles_seen = []
 
-    def interpret(messages, previous_request, selected_job, conversation_title):
+    def interpret(messages, previous_request, conversation_title):
         titles_seen.append(conversation_title)
-        result = interpreter(messages, previous_request, selected_job, conversation_title)
+        result = interpreter(messages, previous_request, conversation_title)
         if conversation_title:
             result.conversation_title = "模型不应覆盖旧标题"
         return result
 
     graph = build_talent_decision_engine(
-        request_graph=build_talent_request_graph(request_interpreter=interpret, job_lookup=lambda q, c: []),
+        request_graph=build_talent_request_graph(request_interpreter=interpret),
         evaluation_graph=lambda state: {},
         report_graph=lambda state: {},
         checkpointer=InMemorySaver(),
@@ -158,7 +156,6 @@ def test_parent_keeps_hitl_revision_message_for_following_turn():
     graph = build_talent_decision_engine(
         request_graph=build_talent_request_graph(
             request_interpreter=interpreter,
-            job_lookup=lambda q, c: [],
             candidate_filter=lambda filters, c: [] if any(f.value == 5 for f in filters) else ["C001"],
         ),
         evaluation_graph=lambda state: {}, report_graph=lambda state: {},

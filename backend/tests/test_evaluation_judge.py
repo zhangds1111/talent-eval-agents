@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-GOLDEN = {'draft': {'input_mode': 'job_name', 'job_query': 'AI工程师'}, 'revision_action': 'initial', 'revision_summary': '建立初始人才要求', 'conversation_title': 'AI岗位'}
+GOLDEN = {'draft': {'input_mode': 'detailed_requirement', 'filters': [{'field': 'region', 'operator': 'eq', 'value': '美国'}]}, 'revision_action': 'initial', 'revision_summary': '建立初始选品要求', 'conversation_title': '美国站露营灯'}
 
 def test_chat_factory_uses_selected_model():
     from app.model_provider import get_chat_model
@@ -86,7 +86,7 @@ def test_judge_redacts_pii_before_external_model_call(monkeypatch):
 def test_every_judge_module_has_a_task_spec():
     from app import evaluation_judge as j
     assert set(j.TASK_SPECS) == {
-        'request_understanding', 'job_matching', 'dimension_generation', 'fact_extraction',
+        'request_understanding', 'dimension_generation', 'fact_extraction',
     }
     assert j.TASK_SPECS['request_understanding'].startswith('你是跨境电商选品任务编译器')
     assert j.TASK_SPECS['dimension_generation'] == j.DIMENSION_GENERATOR_PROMPT
@@ -182,24 +182,19 @@ def test_invalid_judge_response_reports_the_validation_stage(client, monkeypatch
 def test_replay_uses_frozen_inputs(monkeypatch):
     from app import evaluation_judge as j
     calls = []
-    def interpreter(messages, previous_request, selected_job=None, conversation_title=''):
-        calls.append((messages, previous_request, selected_job, conversation_title))
+    def interpreter(messages, previous_request, conversation_title=''):
+        calls.append((messages, previous_request, conversation_title))
         return j.output_schema('request_understanding').model_validate(GOLDEN)
     monkeypatch.setattr(j, 'model_request_interpreter', interpreter)
-    item = SimpleNamespace(module_key='request_understanding', input_payload={'messages':[{'role':'human','content':'AI工程师'}], 'previous_request':{'x':1}, 'conversation_title':'旧标题', 'selected_job':{'name':'AI'}}, golden_output=GOLDEN)
-    assert j.replay_output(item)['draft']['job_query'] == 'AI工程师'
+    item = SimpleNamespace(module_key='request_understanding', input_payload={'messages':[{'role':'human','content':'AI工程师'}], 'previous_request':{'x':1}, 'conversation_title':'旧标题'}, golden_output=GOLDEN)
+    assert j.replay_output(item)['draft']['filters'][0]['value'] == '美国'
     assert calls[0][0][0].content == 'AI工程师'
-    assert calls[0][1:] == ({'x':1}, {'name':'AI'}, '旧标题')
+    assert calls[0][1:] == ({'x':1}, '旧标题')
 
 
 def test_replay_supports_every_collected_module(monkeypatch):
     from app import evaluation_judge as j
 
-    job_matches = [{
-        'job_code': 'AI-01', 'name': 'AI工程师', 'content': '负责 AI 应用开发',
-        'version': 1, 'match_type': 'exact', 'match_score': 1.0,
-    }]
-    monkeypatch.setattr(j, 'database_job_lookup', lambda query, context: job_matches)
 
     class DimensionGenerator:
         def __call__(self, talent_request, query_plan):
@@ -223,8 +218,6 @@ def test_replay_supports_every_collected_module(monkeypatch):
 
     monkeypatch.setattr(j, 'get_chat_model', lambda **kwargs: StructuredModel())
 
-    job = SimpleNamespace(module_key='job_matching', input_payload={'job_query': 'AI工程师'},
-                          replay_context={'tenant_id': 'course-demo', 'permission_scopes': ['hr_private']})
     dimensions = SimpleNamespace(module_key='dimension_generation', input_payload={'talent_request': {}, 'query_plan': {}}, replay_context={})
     facts = SimpleNamespace(module_key='fact_extraction', input_payload={
         'requirement': '有 Agent 评测经验',
@@ -232,7 +225,6 @@ def test_replay_supports_every_collected_module(monkeypatch):
         'output_schema': j.EvidenceExtraction.model_json_schema(),
     }, replay_context={})
 
-    assert j.replay_output(job)['route'] == 'select_exact_job'
     assert j.replay_output(dimensions)['dimensions'][0]['name'] == '项目经验'
     assert j.replay_output(facts)['missing_information'] == ['材料不足']
 
@@ -279,14 +271,14 @@ def test_run_groups_sort_by_completion_and_count_all_matching_cases(client):
             rid = f'group-{index}'
             db.add(TalentRunRecord(run_id=rid, conversation_id='group-conv', turn_no=index+1, message='test', status='completed', started_at=now, updated_at=now, completed_at=now+timedelta(minutes=index)))
             for invocation in range(1, 13):
-                db.add(EvaluationCaseRecord(source_run_id=rid, conversation_id='group-conv', turn_no=index+1, module_key='job_matching', invocation_no=invocation, input_payload={}, output_payload={}))
+                db.add(EvaluationCaseRecord(source_run_id=rid, conversation_id='group-conv', turn_no=index+1, module_key='dimension_generation', invocation_no=invocation, input_payload={}, output_payload={}))
         db.commit()
-    first = c.get('/api/evaluation/cases?group_by=run&module_key=job_matching&limit=10').json()
+    first = c.get('/api/evaluation/cases?group_by=run&module_key=dimension_generation&limit=10').json()
     assert len(first['items']) == 10 and first['has_more']
     assert first['items'][0]['source_run_id'] == 'group-10'
     assert first['items'][0]['case_count'] == 12
     assert first['items'][0]['conversation_title'] == '上海工程师'
-    second = c.get('/api/evaluation/cases?group_by=run&module_key=job_matching&limit=10&offset=10').json()
+    second = c.get('/api/evaluation/cases?group_by=run&module_key=dimension_generation&limit=10&offset=10').json()
     assert [r['source_run_id'] for r in second['items']] == ['group-0']
     detail = c.get('/api/evaluation/cases?source_run_id=group-10&limit=10').json()
     assert len(detail['items']) == 10 and detail['has_more']

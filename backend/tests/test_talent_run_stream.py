@@ -32,7 +32,7 @@ class StreamingState(TypedDict, total=False):
     errors: list[str]
 
 
-def _streaming_graph(*, require_job_selection: bool = False, slow: bool = False):
+def _streaming_graph(*, require_revision: bool = False, slow: bool = False):
     builder = StateGraph(StreamingState)
 
     async def interpret_input(state: StreamingState) -> dict[str, Any]:
@@ -40,18 +40,16 @@ def _streaming_graph(*, require_job_selection: bool = False, slow: bool = False)
             await asyncio.sleep(1)
         return {"status": "request_understood"}
 
-    def confirm_job(_: StreamingState) -> dict[str, Any]:
+    def resolve_requirements(_: StreamingState) -> dict[str, Any]:
         decision = interrupt(
             {
-                "type": "job_selection",
-                "question": "请选择岗位",
-                "options": [
-                    {"job_code": "JD-AI-001", "name": "高级 AI 应用工程师"},
-                    {"job_code": "JD-AI-002", "name": "AI 应用工程师（平台方向）"},
-                ],
+                "type": "requirement_revision",
+                "interaction_id": "rr-v0",
+                "blocking_reason": "筛选后未命中候选商品",
+                "request_text": "美国站露营灯，毛利不低于 80%",
             }
         )
-        return {"selected_job": decision["job_code"]}
+        return {"revision_text": decision["revision_text"]}
 
     def filter_candidates(_: StreamingState) -> dict[str, Any]:
         return {"candidate_ids": ["C001"], "status": "candidates_ready"}
@@ -95,8 +93,8 @@ def _streaming_graph(*, require_job_selection: bool = False, slow: bool = False)
         }
 
     builder.add_node("interpret_input", interpret_input)
-    if require_job_selection:
-        builder.add_node("confirm_job", confirm_job)
+    if require_revision:
+        builder.add_node("resolve_requirements", resolve_requirements)
     builder.add_node("filter_candidates", filter_candidates)
     builder.add_node("generate_dimensions", generate_dimensions)
     builder.add_node("prepare_work_items", prepare_work_items)
@@ -105,9 +103,9 @@ def _streaming_graph(*, require_job_selection: bool = False, slow: bool = False)
     builder.add_node("aggregate_candidates", aggregate_candidates)
     builder.add_node("validate_report", validate_report)
     builder.add_edge(START, "interpret_input")
-    if require_job_selection:
-        builder.add_edge("interpret_input", "confirm_job")
-        builder.add_edge("confirm_job", "filter_candidates")
+    if require_revision:
+        builder.add_edge("interpret_input", "resolve_requirements")
+        builder.add_edge("resolve_requirements", "filter_candidates")
     else:
         builder.add_edge("interpret_input", "filter_candidates")
     builder.add_edge("filter_candidates", "generate_dimensions")
@@ -291,20 +289,17 @@ async def test_two_new_turns_continue_numbering_after_process_restart():
 
 @pytest.mark.anyio
 async def test_actual_langgraph_interrupt_resumes_same_thread_and_run():
-    manager = _manager(_streaming_graph(require_job_selection=True))
-    run = await manager.create_run("AI 应用工程师")
+    manager = _manager(_streaming_graph(require_revision=True))
+    run = await manager.create_run("美国站露营灯，毛利不低于 80%")
     await _wait_for_status(manager, run.run_id, RunStatus.WAITING_INPUT)
 
     interrupt_event = manager.events_since(run.run_id, 0)[-1]
     assert interrupt_event.type == "hitl.required"
-    assert interrupt_event.data["interaction_type"] == "job_selection"
-    assert interrupt_event.data["options"][0] == {
-        "value": "JD-AI-001",
-        "label": "高级 AI 应用工程师",
-    }
+    assert interrupt_event.data["interaction_type"] == "requirement_revision"
+    assert interrupt_event.data["initial_value"] == "美国站露营灯，毛利不低于 80%"
     assert manager.is_stream_finished(run.run_id) is False
 
-    await manager.resume_run(run.run_id, "JD-AI-001")
+    await manager.resume_run(run.run_id, "美国站露营灯，毛利不低于 40%")
     await _wait_for_status(manager, run.run_id, RunStatus.COMPLETED)
 
     after_resume = manager.events_since(run.run_id, interrupt_event.sequence)

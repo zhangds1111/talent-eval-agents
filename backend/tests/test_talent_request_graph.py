@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from langchain.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.types import Command
 
 from app.query_plan import FilterCondition, SemanticRequirement
 from app.talent_decision_graph import DecisionContext
@@ -14,92 +13,52 @@ def _context() -> DecisionContext:
     return DecisionContext(tenant_id="course-demo", permission_scopes=("hr_private",))
 
 
-def _job(
-    code: str,
-    name: str,
-    *,
-    match_type: str,
-    score: float = 1.0,
-    content: str = "负责企业知识库与 Agent 应用建设",
-) -> dict:
-    return {
-        "job_code": code,
-        "name": name,
-        "match_score": score,
-        "match_type": match_type,
-        "version": 1,
-        "content": content,
-    }
-
-
 class FixtureInterpreter:
     def __init__(self) -> None:
-        self.calls: list[tuple[str, str | None]] = []
+        self.calls: list[str] = []
 
-    def __call__(self, request_text: str, selected_job: dict | None = None) -> TalentRequestDraft:
-        selected_code = selected_job["job_code"] if selected_job else None
-        self.calls.append((request_text, selected_code))
-        if selected_job is not None:
+    def __call__(self, request_text: str) -> TalentRequestDraft:
+        self.calls.append(request_text)
+        if "美国" in request_text:
             return TalentRequestDraft(
-                input_mode="detailed_requirement",
-                job_query=selected_job["name"],
-                filters=[],
+                filters=[FilterCondition(field="region", operator="eq", value="美国")],
                 semantic_requirements=[
-                    SemanticRequirement(requirement_id="S1", query=selected_job["content"], required=True)
+                    SemanticRequirement(requirement_id="S1", query="FCC 检测报告", required=True)
                 ],
-                evaluation_preferences=[],
-                clarifications=[],
-            )
-        if "上海" in request_text:
-            return TalentRequestDraft(
-                input_mode="detailed_requirement",
-                filters=[FilterCondition(field="region", operator="eq", value="上海")],
-                semantic_requirements=[
-                    SemanticRequirement(requirement_id="S1", query="企业知识库经验", required=True)
-                ],
-                evaluation_preferences=["有 Agent 评测经验优先"],
-                clarifications=[],
+                evaluation_preferences=["交期短优先"],
             )
         return TalentRequestDraft(
-            input_mode="job_name",
-            job_query=request_text,
-            filters=[],
-            semantic_requirements=[],
-            evaluation_preferences=[],
-            clarifications=[],
+            clarifications=[{"expression": request_text, "reason": "缺少目标市场"}],
         )
 
 
-def test_detailed_requirement_builds_plan_without_job_lookup():
+def test_detailed_requirement_builds_plan_directly():
     interpreter = FixtureInterpreter()
-    lookup_calls: list[str] = []
 
     graph = build_talent_request_graph(
         request_interpreter=interpreter,
-        job_lookup=lambda query, context: lookup_calls.append(query) or [],
         checkpointer=InMemorySaver(),
     )
     result = graph.invoke(
-        {"request_text": "筛选上海且有企业知识库经验的人才，有 Agent 评测经验优先"},
+        {"request_text": "美国站露营灯，需要 FCC 检测报告，交期短优先"},
         {"configurable": {"thread_id": "lesson14-detailed"}},
         context=_context(),
     )
 
     assert result["status"] == "plan_ready"
     assert result["input_mode"] == "detailed_requirement"
-    assert result["job_matches"] == []
     assert result["query_plan"]["filters"] == [
-        {"field": "region", "operator": "eq", "value": "上海"}
+        {"field": "region", "operator": "eq", "value": "美国"}
     ]
-    assert result["talent_request"]["evaluation_preferences"] == ["有 Agent 评测经验优先"]
-    assert lookup_calls == []
+    assert result["talent_request"]["evaluation_preferences"] == ["交期短优先"]
+    assert "target_job" not in result["talent_request"]
+    assert interpreter.calls == ["美国站露营灯，需要 FCC 检测报告，交期短优先"]
 
 
 def test_request_understanding_is_automatically_captured_from_graph_execution():
     captured: list[EvaluationCaseDraft] = []
     graph = build_talent_request_graph(
         request_interpreter=FixtureInterpreter(),
-        job_lookup=lambda query, context: [],
         case_recorder=captured.append,
     )
     context = DecisionContext(
@@ -111,7 +70,7 @@ def test_request_understanding_is_automatically_captured_from_graph_execution():
     )
 
     result = graph.invoke(
-        {"request_text": "筛选上海且有企业知识库经验的人才"},
+        {"request_text": "美国站露营灯，需要 FCC 检测报告"},
         context=context,
     )
 
@@ -123,126 +82,26 @@ def test_request_understanding_is_automatically_captured_from_graph_execution():
         "conversation-22",
         3,
     )
-    assert case.input_payload["messages"][0]["content"] == "筛选上海且有企业知识库经验的人才"
-    assert case.output_payload["draft"]["filters"][0]["value"] == "上海"
+    assert case.input_payload["messages"][0]["content"] == "美国站露营灯，需要 FCC 检测报告"
+    assert "selected_job" not in case.input_payload
+    assert case.output_payload["draft"]["filters"][0]["value"] == "美国"
     assert case.status == "succeeded"
 
 
-def test_unique_exact_job_match_continues_without_interrupt():
-    interpreter = FixtureInterpreter()
-    captured: list[EvaluationCaseDraft] = []
-    graph = build_talent_request_graph(
-        request_interpreter=interpreter,
-        job_lookup=lambda query, context: [
-            _job("JD-AI-001", "高级 AI 应用工程师", match_type="exact"),
-            _job("JD-AI-002", "AI 平台工程师", match_type="fuzzy", score=0.61),
-        ],
-        checkpointer=InMemorySaver(),
-        case_recorder=captured.append,
-    )
-
-    result = graph.invoke(
-        {"request_text": "高级 AI 应用工程师"},
-        {"configurable": {"thread_id": "lesson14-exact"}},
-        context=DecisionContext(
-            tenant_id="course-demo",
-            permission_scopes=("hr_private",),
-            run_id="run-exact-job",
-            conversation_id="conversation-exact-job",
-            turn_no=1,
-        ),
-    )
-
-    assert result["status"] == "plan_ready"
-    assert result["selected_job"]["job_code"] == "JD-AI-001"
-    assert "__interrupt__" not in result
-    assert interpreter.calls == [
-        ("高级 AI 应用工程师", None),
-        ("高级 AI 应用工程师", "JD-AI-001"),
-    ]
-    assert len(captured) == 3
-    assert captured[1].output_payload["route"] == "select_exact_job"
-    assert captured[0].input_payload["selected_job"] is None
-    assert captured[2].input_payload["selected_job"]["job_code"] == "JD-AI-001"
-
-
-def test_ambiguous_job_match_interrupts_and_resumes_same_thread():
-    interpreter = FixtureInterpreter()
-    lookup_calls: list[str] = []
-    matches = [
-        _job("JD-AI-001", "高级 AI 应用工程师", match_type="contains"),
-        _job("JD-AI-002", "AI 应用工程师（平台方向）", match_type="contains"),
-    ]
-
-    def lookup(query: str, context: DecisionContext) -> list[dict]:
-        lookup_calls.append(query)
-        return matches
-
-    graph = build_talent_request_graph(
-        request_interpreter=interpreter,
-        job_lookup=lookup,
-        checkpointer=InMemorySaver(),
-    )
-    config = {"configurable": {"thread_id": "lesson14-ambiguous"}}
-
-    interrupted = graph.invoke({"request_text": "AI 应用工程师"}, config, context=_context())
-
-    payload = interrupted["__interrupt__"][0].value
-    assert payload["type"] == "job_selection"
-    assert payload["request_text"] == "AI 应用工程师"
-    assert [item["job_code"] for item in payload["options"]] == ["JD-AI-001", "JD-AI-002"]
-    assert lookup_calls == ["AI 应用工程师"]
-
-    resumed = graph.invoke(
-        Command(resume={"action": "select", "job_code": "JD-AI-002"}),
-        config,
-        context=_context(),
-    )
-
-    assert resumed["status"] == "plan_ready"
-    assert resumed["selected_job"]["job_code"] == "JD-AI-002"
-    assert resumed["talent_request"]["target_job"]["job_code"] == "JD-AI-002"
-    assert resumed["query_plan"]["semantic_requirements"][0]["query"] == "负责企业知识库与 Agent 应用建设"
-    assert lookup_calls == ["AI 应用工程师"]
-
-
-def test_ambiguous_job_match_can_be_cancelled():
-    matches = [
-        _job("JD-AI-001", "高级 AI 应用工程师", match_type="contains"),
-        _job("JD-AI-002", "AI 应用工程师（平台方向）", match_type="contains"),
-    ]
+def test_ambiguous_request_reports_clarification_without_job_branch():
     graph = build_talent_request_graph(
         request_interpreter=FixtureInterpreter(),
-        job_lookup=lambda query, context: matches,
-        checkpointer=InMemorySaver(),
-    )
-    config = {"configurable": {"thread_id": "lesson14-cancel-job"}}
-
-    interrupted = graph.invoke({"request_text": "AI 应用工程师"}, config, context=_context())
-    assert interrupted["__interrupt__"][0].value["actions"] == ["select", "cancel"]
-
-    result = graph.invoke(Command(resume={"action": "cancel"}), config, context=_context())
-    assert result["status"] == "cancelled"
-    assert graph.get_state(config).next == ()
-
-def test_no_job_match_ends_without_building_plan():
-    graph = build_talent_request_graph(
-        request_interpreter=FixtureInterpreter(),
-        job_lookup=lambda query, context: [],
         checkpointer=InMemorySaver(),
     )
 
     result = graph.invoke(
-        {"request_text": "量子招聘架构师"},
-        {"configurable": {"thread_id": "lesson14-no-match"}},
+        {"request_text": "随便选点好卖的"},
+        {"configurable": {"thread_id": "product-clarify"}},
         context=_context(),
     )
 
-    assert result["status"] == "no_job_match"
-    assert result["query_plan"] == {}
-    assert result["clarifications"] == [
-        {"expression": "量子招聘架构师", "reason": "未找到可确认的岗位 JD"}
-    ]
+    assert result["status"] == "clarification_required"
+    assert result["clarifications"] == [{"expression": "随便选点好卖的", "reason": "缺少目标市场"}]
 
 
 def test_model_interpreter_prompt_distinguishes_region_from_current_position(monkeypatch):
@@ -282,5 +141,5 @@ def test_model_interpreter_prompt_distinguishes_region_from_current_position(mon
     assert "region: 目标市场（国家或地区）" in system_prompt
     assert "current_position: 商品子类" in system_prompt
     assert "国家或地区只映射为 region" in system_prompt
-    assert "input_mode 一律使用 detailed_requirement" in system_prompt
+    assert "input_mode 固定为 detailed_requirement" in system_prompt
     assert result.draft.filters[0].field.value == "region"

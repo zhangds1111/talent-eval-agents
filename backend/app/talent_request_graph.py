@@ -37,13 +37,10 @@ from app.talent_decision_graph import DecisionContext
 from app.talent_tools import TalentToolContext, TalentToolService
 
 
-RequestInputMode = Literal["detailed_requirement", "job_name"]
+RequestInputMode = Literal["detailed_requirement"]
 RequestStatus = Literal[
     "received",
     "request_understood",
-    "jobs_found",
-    "job_confirmed",
-    "no_job_match",
     "plan_ready",
     "clarification_required",
     "candidates_empty",
@@ -54,24 +51,8 @@ RequestStatus = Literal[
 ]
 
 
-class JobMatch(TypedDict):
-    job_code: str
-    name: str
-    match_score: float
-    match_type: Literal["exact", "contains", "fuzzy"]
-    version: int
-    content: str
-
-
-class TargetJob(TypedDict):
-    job_code: str
-    name: str
-    version: int
-
-
 class TalentRequestDraft(BaseModel):
-    input_mode: RequestInputMode
-    job_query: str | None = None
+    input_mode: RequestInputMode = "detailed_requirement"
     filters: list[FilterCondition] = Field(default_factory=list)
     semantic_requirements: list[SemanticRequirement] = Field(default_factory=list)
     evaluation_preferences: list[str] = Field(default_factory=list)
@@ -99,8 +80,6 @@ class TalentRequestOutput(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     status: RequestStatus
     input_mode: RequestInputMode
-    job_matches: list[JobMatch]
-    selected_job: JobMatch | None
     talent_request: dict[str, Any]
     query_plan: dict[str, Any]
     candidate_ids: list[str]
@@ -118,8 +97,6 @@ class TalentRequestState(TypedDict, total=False):
     request_text: str
     input_mode: RequestInputMode
     draft: dict[str, Any]
-    job_matches: list[JobMatch]
-    selected_job: JobMatch | None
     talent_request: dict[str, Any]
     query_plan: dict[str, Any]
     candidate_ids: list[str]
@@ -134,7 +111,6 @@ class TalentRequestState(TypedDict, total=False):
 
 
 RequestInterpreter = Callable[..., TalentRequestUnderstanding | TalentRequestDraft]
-JobLookup = Callable[[str, DecisionContext], list[JobMatch]]
 CandidateFilter = Callable[[list[FilterCondition], DecisionContext], list[str]]
 CaseRecorder = Callable[[EvaluationCaseDraft], Any]
 
@@ -152,8 +128,6 @@ def _receive_request(state: TalentRequestState, runtime: Runtime[DecisionContext
         raise ValueError("request_text 不能为空")
     update: dict[str, Any] = {
         "request_text": request_text,
-        "job_matches": [],
-        "selected_job": None,
         "query_plan": {},
         "candidate_ids": [],
         "condition_revisions": [],
@@ -170,7 +144,6 @@ def _receive_request(state: TalentRequestState, runtime: Runtime[DecisionContext
 def _call_request_interpreter(
     interpreter: RequestInterpreter,
     state: TalentRequestState,
-    selected_job: JobMatch | None,
     context: DecisionContext,
     case_recorder: CaseRecorder | None,
 ) -> TalentRequestUnderstanding:
@@ -178,7 +151,7 @@ def _call_request_interpreter(
     try:
         parameters = inspect.signature(interpreter).parameters
         if len(parameters) <= 2:
-            legacy = interpreter(state["request_text"], selected_job)
+            legacy = interpreter(state["request_text"])
             if isinstance(legacy, TalentRequestUnderstanding):
                 understanding = legacy
             else:
@@ -190,7 +163,6 @@ def _call_request_interpreter(
             result = interpreter(
                 recent_request_messages(list(state.get("messages", []))),
                 dict(state.get("talent_request", {})),
-                selected_job,
                 state.get("conversation_title", ""),
             )
             understanding = TalentRequestUnderstanding.model_validate(result)
@@ -204,7 +176,6 @@ def _call_request_interpreter(
                     messages=list(state.get("messages", [])),
                     previous_request=dict(state.get("talent_request", {})),
                     conversation_title=state.get("conversation_title", ""),
-                    selected_job=selected_job,
                     output_payload={},
                     replay_context={
                         "tenant_id": context.tenant_id,
@@ -229,7 +200,6 @@ def _call_request_interpreter(
                 messages=list(state.get("messages", [])),
                 previous_request=dict(state.get("talent_request", {})),
                 conversation_title=state.get("conversation_title", ""),
-                selected_job=selected_job,
                 output_payload=understanding.model_dump(mode="json"),
                 replay_context={
                     "tenant_id": context.tenant_id,
@@ -256,7 +226,6 @@ def _interpret_input(
         understanding = _call_request_interpreter(
             request_interpreter,
             state,
-            None,
             runtime.context,
             case_recorder,
         )
@@ -273,126 +242,13 @@ def _interpret_input(
     return interpret_input
 
 
-def _route_input(state: TalentRequestState) -> Literal["lookup_jobs", "build_plan"]:
-    return "lookup_jobs" if state["input_mode"] == "job_name" else "build_plan"
-
-
-def _lookup_jobs(job_lookup: JobLookup, case_recorder=None):
-    def lookup_jobs(state: TalentRequestState, runtime: Runtime[DecisionContext]) -> dict[str, Any]:
-        job_query = str(state["draft"].get("job_query") or state["request_text"])
-
-        # 岗位匹配 Case 要在查询完成后、Graph 路由前采集。
-        # 输出同时保存完整候选列表和本次路由结果，避免后续只看到最终岗位，无法判断问题来自名称匹配还是岗位确认分支。
-        def match_and_route():
-            matches = job_lookup(job_query, runtime.context)
-            return {"matches": matches, "route": _route_job_matches({"job_matches": matches})}
-
-        result = capture_call(match_and_route, context=runtime.context,
-            module_key=EvaluationModule.JOB_MATCHING,
-            input_payload={"job_query": job_query}, recorder=case_recorder,
-            version_snapshot={"matching_rules": "job-lookup-v1"})
-        matches = result["matches"]
-        return {"job_matches": matches, "status": "jobs_found"}
-
-    return lookup_jobs
-
-
-def _route_job_matches(
-    state: TalentRequestState,
-) -> Literal["select_exact_job", "confirm_job", "no_job_match"]:
-    exact_matches = [item for item in state["job_matches"] if item["match_type"] == "exact"]
-    if len(exact_matches) == 1:
-        return "select_exact_job"
-    if state["job_matches"]:
-        return "confirm_job"
-    return "no_job_match"
-
-
-def _select_exact_job(state: TalentRequestState) -> dict[str, Any]:
-    selected = next(item for item in state["job_matches"] if item["match_type"] == "exact")
-    return {"selected_job": selected, "status": "job_confirmed"}
-
-
-def _confirm_job(state: TalentRequestState) -> dict[str, Any]:
-    selection = interrupt(
-        {
-            "type": "job_selection",
-            "question": "请选择本次人才评估使用的岗位 JD",
-            "request_text": state["request_text"],
-            "options": [
-                {
-                    "job_code": item["job_code"],
-                    "name": item["name"],
-                    "match_score": item["match_score"],
-                    "match_type": item["match_type"],
-                    "version": item["version"],
-                }
-                for item in state["job_matches"]
-            ],
-            "actions": ["select", "cancel"],
-        }
-    )
-    if not isinstance(selection, dict):
-        raise ValueError("恢复数据必须是 JSON 对象")
-    if selection.get("action") == "cancel":
-        return {"status": "cancelled"}
-    if selection.get("action") != "select":
-        raise ValueError("action 必须是 select 或 cancel")
-    selected_code = selection.get("job_code")
-    selected = next(
-        (item for item in state["job_matches"] if item["job_code"] == selected_code),
-        None,
-    )
-    if selected is None:
-        raise ValueError("恢复数据中的 job_code 不在待确认岗位列表中")
-    return {"selected_job": selected, "status": "job_confirmed"}
-
-
-def _route_job_confirmation(state: TalentRequestState) -> str:
-    return "compile_selected_job" if state["status"] == "job_confirmed" else END
-
-
-def _compile_selected_job(
-    request_interpreter: RequestInterpreter,
-    case_recorder: CaseRecorder | None,
-):
-    def compile_selected_job(
-        state: TalentRequestState,
-        runtime: Runtime[DecisionContext],
-    ) -> dict[str, Any]:
-        understanding = _call_request_interpreter(
-            request_interpreter,
-            state,
-            state["selected_job"],
-            runtime.context,
-            case_recorder,
-        )
-        draft = understanding.draft
-        return {
-            "draft": draft.model_dump(mode="json"),
-            "input_mode": "job_name",
-            "conversation_title": state.get("conversation_title") or understanding.conversation_title,
-        }
-
-    return compile_selected_job
-
-
 def _build_plan(state: TalentRequestState) -> dict[str, Any]:
     draft = TalentRequestDraft.model_validate(state["draft"])
-    selected_job = state.get("selected_job")
-    target_job: TargetJob | None = None
-    if selected_job is not None:
-        target_job = {
-            "job_code": selected_job["job_code"],
-            "name": selected_job["name"],
-            "version": selected_job["version"],
-        }
 
     talent_request = {
         "original_text": state["request_text"],
         "task_type": "evaluate_and_recommend",
         "source": state["input_mode"],
-        "target_job": target_job,
         "hard_conditions": [item.model_dump(mode="json") for item in draft.filters],
         "semantic_conditions": [
             item.model_dump(mode="json") for item in draft.semantic_requirements
@@ -412,19 +268,6 @@ def _build_plan(state: TalentRequestState) -> dict[str, Any]:
         "query_plan": query_plan.model_dump(mode="json"),
         "clarifications": [item.model_dump(mode="json") for item in draft.clarifications],
         "status": status,
-    }
-
-
-def _no_job_match(state: TalentRequestState) -> dict[str, Any]:
-    clarification = {
-        "expression": state["request_text"],
-        "reason": "未找到可确认的岗位 JD",
-    }
-    return {
-        "query_plan": {},
-        "talent_request": {},
-        "clarifications": [clarification],
-        "status": "no_job_match",
     }
 
 
@@ -521,19 +364,7 @@ def _resolve_requirements():
                 f"{item['field']} {item['operator']} {item['value']}" for item in filters
             )
             blocking_reason = f"使用以下结构化条件筛选后未命中候选商品：{rendered}"
-        selected_job = state.get("selected_job")
-        if selected_job is not None:
-            editable_request = selected_job["content"]
-            request_source = "job_profile"
-            selected_job_source: dict[str, Any] | None = {
-                "job_code": selected_job["job_code"],
-                "name": selected_job["name"],
-                "version": selected_job["version"],
-            }
-        else:
-            editable_request = state["request_text"]
-            request_source = "user_request"
-            selected_job_source = None
+        editable_request = state["request_text"]
         payload = {
             "type": "requirement_revision",
             "interaction_id": interaction_id,
@@ -541,8 +372,7 @@ def _resolve_requirements():
             "blocking_reason": blocking_reason,
             "question": "请补充或修订选品条件后重新提交，或取消本次任务",
             "request_text": editable_request,
-            "request_source": request_source,
-            "selected_job": selected_job_source,
+            "request_source": "user_request",
             "filters": filters,
             "semantic_requirements": state.get("draft", {}).get("semantic_requirements", []),
             "clarifications": state.get("clarifications", []),
@@ -576,8 +406,6 @@ def _resolve_requirements():
         return {
             "request_text": revision_text,
             "messages": [HumanMessage(content=revision_text)],
-            "selected_job": None,
-            "job_matches": [],
             "candidate_ids": [],
             "condition_revisions": [revision],
             "plan_version": plan_version + 1,
@@ -761,7 +589,6 @@ def _resolve_empty_candidates(candidate_filter: CandidateFilter):
 def build_talent_request_graph(
     *,
     request_interpreter: RequestInterpreter,
-    job_lookup: JobLookup,
     candidate_filter: CandidateFilter | None = None,
     case_recorder: CaseRecorder | None = None,
     checkpointer: Any | None = None,
@@ -774,27 +601,10 @@ def build_talent_request_graph(
     )
     builder.add_node("receive_request", _receive_request)
     builder.add_node("interpret_input", _interpret_input(request_interpreter, case_recorder))
-    builder.add_node("lookup_jobs", _lookup_jobs(job_lookup, case_recorder))
-    builder.add_node("select_exact_job", _select_exact_job)
-    builder.add_node("confirm_job", _confirm_job)
-    builder.add_node(
-        "compile_selected_job",
-        _compile_selected_job(request_interpreter, case_recorder),
-    )
     builder.add_node("build_plan", _build_plan)
-    builder.add_node("no_job_match", _no_job_match)
     builder.add_edge(START, "receive_request")
     builder.add_edge("receive_request", "interpret_input")
-    builder.add_conditional_edges("interpret_input", _route_input)
-    builder.add_conditional_edges("lookup_jobs", _route_job_matches)
-    builder.add_edge("select_exact_job", "compile_selected_job")
-    builder.add_conditional_edges(
-        "confirm_job",
-        _route_job_confirmation,
-        {"compile_selected_job": "compile_selected_job", END: END},
-    )
-    builder.add_edge("compile_selected_job", "build_plan")
-    builder.add_edge("no_job_match", END)
+    builder.add_edge("interpret_input", "build_plan")
 
     if candidate_filter is None:
         # 第 14 课行为：编译出 QueryPlan 即结束，候选人检索与澄清节点不挂载
@@ -825,19 +635,18 @@ MODEL_SYSTEM_PROMPT = """你是跨境电商选品任务编译器。按照给定 
 首轮 revision_action 为 initial，conversation_title 为空时生成不超过 20 个中文字的标题。
 已有 conversation_title 时不生成标题，后续轮根据最新消息在 add、update、remove 中选择，保留未被修改的既有条件。
 用 revision_summary 简要说明变化。
-input_mode 一律使用 detailed_requirement：直接把用户自然语言需求（目标市场、渠道、品类、售价、成本、毛利、重量、是否带电、电池类型、认证偏好、评分或选品偏好）编译为结构化条件，不输出 job_query、不引用任何模板。
+input_mode 固定为 detailed_requirement：直接把用户自然语言需求（目标市场、渠道、品类、售价、成本、毛利、重量、是否带电、电池类型、认证偏好、评分或选品偏好）编译为结构化条件，不引用任何模板。
 结构化硬条件只能写入 filters，字段定义与允许的操作符如下：
 {filter_dsl}
 国家或地区只映射为 region（目标市场），current_position 只表示商品子类，禁止将市场或国家写入 current_position。
 售价、到岸成本、毛利率的量化阈值写入 filters（target_price、landed_cost、gross_margin_percent；“毛利不低于 40%”即 gross_margin_percent gte 40）；是否带电、电池类型、重量、评分等没有结构化字段的条件写入 semantic_requirements，不得塞进 filters 中语义不符的字段；必需认证的缺口由程序按规则表计算，用户点名的认证/检测报告仍写入 semantic_requirements 以检索材料证据；“需求旺盛”“质量稳定”“差评少”等无法精确过滤的要求写入 semantic_requirements；“优先低 MOQ”“优先交期短”等写入 evaluation_preferences。
 只有歧义或矛盾导致无法形成可执行查询计划时才写入 clarifications。租户和权限不得从用户文本提取。
-本阶段没有选品模板，不根据模板名称猜测条件，也不输出 job_name 输入模式。"""
+系统没有选品模板，不根据模板名称猜测条件。"""
 
 
 def model_request_interpreter(
     messages: list[AnyMessage],
     previous_request: dict[str, Any],
-    selected_job: JobMatch | None = None,
     conversation_title: str = "",
 ) -> TalentRequestUnderstanding:
     model = get_chat_model(temperature=0)
@@ -852,12 +661,6 @@ def model_request_interpreter(
         f"previous_request={previous_request}\n"
         f"conversation_title={conversation_title}"
     )
-    if selected_job is not None:
-        user_content += (
-            "\n"
-            f"confirmed_job={selected_job['name']}\n"
-            f"job_description={selected_job['content']}"
-        )
     result = model.with_structured_output(
         TalentRequestRevision if conversation_title else TalentRequestUnderstanding,
         method="function_calling",
@@ -871,17 +674,6 @@ def model_request_interpreter(
         revision = TalentRequestRevision.model_validate(result)
         return TalentRequestUnderstanding(**revision.model_dump(), conversation_title=conversation_title)
     return TalentRequestUnderstanding.model_validate(result)
-
-
-def database_job_lookup(query: str, context: DecisionContext) -> list[JobMatch]:
-    service = TalentToolService(session_factory=SessionLocal)
-    tool_context = TalentToolContext(
-        tenant_id=context.tenant_id,
-        permission_scopes=context.permission_scopes,
-        actor_id="langsmith-studio",
-        run_id="lesson-14",
-    )
-    return service.lookup_job_descriptions(query, context=tool_context)
 
 
 def database_candidate_filter(filters: list[FilterCondition], context: DecisionContext) -> list[str]:
@@ -898,7 +690,6 @@ def database_candidate_filter(filters: list[FilterCondition], context: DecisionC
 # Agent Server injects its managed checkpointer when this graph is loaded from langgraph.json.
 graph = build_talent_request_graph(
     request_interpreter=model_request_interpreter,
-    job_lookup=database_job_lookup,
     candidate_filter=database_candidate_filter,
     case_recorder=SqlEvaluationCaseStore(SessionLocal).record,
 )

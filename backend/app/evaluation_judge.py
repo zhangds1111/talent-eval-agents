@@ -5,13 +5,10 @@ from pydantic import BaseModel, Field, ValidationError
 from langchain.messages import HumanMessage, AIMessage, SystemMessage
 from app.model_provider import get_chat_model, get_judge_model
 from app.prompt_sanitizer import sanitize_prompt
-from app.talent_decision_graph import DecisionContext
 from app.talent_request_graph import (
     TalentRequestUnderstanding,
-    database_job_lookup,
     model_request_interpreter,
     MODEL_SYSTEM_PROMPT,
-    _route_job_matches,
 )
 from app.query_plan import filter_dsl_catalog
 from app.talent_evaluation_dispatch import (
@@ -24,27 +21,12 @@ from app.evidence_pack import EvidenceExtraction, EXTRACTION_PROMPT
 JUDGE_VERSION = 'module-judge-v1'
 TASK_SPECS = {
     'request_understanding': MODEL_SYSTEM_PROMPT.format(filter_dsl=filter_dsl_catalog()),
-    'job_matching': '''根据 job_query 返回名称相关的岗位候选和路由。
-恰好一个 exact 候选时 route=select_exact_job；没有 exact 但存在候选，或存在多个 exact 时 route=confirm_job；无候选时 route=no_job_match。
-输入没有冻结完整岗位库，因此只评价已返回候选及路由的一致性，不评价召回完整率。''',
     'dimension_generation': DIMENSION_GENERATOR_PROMPT,
     'fact_extraction': EXTRACTION_PROMPT,
 }
 
-class JobCandidate(BaseModel):
-    job_code: str
-    name: str
-    content: str
-    version: int
-    match_type: Literal['exact', 'contains', 'fuzzy']
-    match_score: float
-
-class JobOutput(BaseModel):
-    matches: list[JobCandidate]
-    route: Literal['select_exact_job', 'confirm_job', 'no_job_match']
-
 def output_schema(module_key):
-    return {'request_understanding': TalentRequestUnderstanding, 'job_matching': JobOutput,
+    return {'request_understanding': TalentRequestUnderstanding,
             'dimension_generation': EvaluationDimensionPlan, 'fact_extraction': EvidenceExtraction}[module_key]
 
 class JudgeResponse(BaseModel):
@@ -113,19 +95,7 @@ def replay_request_understanding(item):
     roles = {'human': HumanMessage, 'user': HumanMessage, 'ai': AIMessage, 'assistant': AIMessage, 'system': SystemMessage}
     messages = [roles[row['role']](content=row['content']) for row in data['messages']]
     return model_request_interpreter(messages, data.get('previous_request', {}),
-        selected_job=data.get('selected_job'), conversation_title=data.get('conversation_title', '')).model_dump(mode='json')
-
-
-def replay_job_matching(item):
-    context_data = item.replay_context or {}
-    context = DecisionContext(
-        tenant_id=context_data.get('tenant_id', 'course-demo'),
-        permission_scopes=tuple(context_data.get('permission_scopes') or ('hr_private',)),
-        run_id='evaluation-replay',
-    )
-    matches = database_job_lookup(item.input_payload['job_query'], context)
-    payload = {'matches': matches, 'route': _route_job_matches({'job_matches': matches})}
-    return JobOutput.model_validate(payload).model_dump(mode='json')
+        conversation_title=data.get('conversation_title', '')).model_dump(mode='json')
 
 
 def replay_dimension_generation(item):
@@ -152,7 +122,6 @@ def replay_fact_extraction(item):
 
 REPLAY_HANDLERS = {
     'request_understanding': replay_request_understanding,
-    'job_matching': replay_job_matching,
     'dimension_generation': replay_dimension_generation,
     'fact_extraction': replay_fact_extraction,
 }

@@ -23,20 +23,6 @@ CREATE TABLE employee_profiles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE job_descriptions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    job_code VARCHAR(64) NOT NULL UNIQUE,
-    tenant_id VARCHAR(64) NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    content TEXT NOT NULL,
-    version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
-    status VARCHAR(32) NOT NULL DEFAULT 'active',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_job_descriptions_tenant_name ON job_descriptions (tenant_id, name);
-
 CREATE TABLE tool_call_audits (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     call_id VARCHAR(64) NOT NULL UNIQUE,
@@ -214,8 +200,7 @@ CREATE TABLE evidence_index_jobs (
 CREATE INDEX idx_evidence_index_jobs_version_created
 ON evidence_index_jobs (document_version_id, created_at DESC);
 COMMENT ON TABLE documents IS '业务层逻辑文档，同一文档可以有多个文件版本';
-COMMENT ON TABLE employee_profiles IS '员工花名册结构化基础信息';
-COMMENT ON TABLE job_descriptions IS '企业维护的岗位 JD，只读人才工具按租户检索';
+COMMENT ON TABLE employee_profiles IS '候选商品（SKU）基础信息：employee_no=SKU、region=目标市场、department=品类、current_position=子类';
 COMMENT ON TABLE tool_call_audits IS '人才数据工具调用审计，只保存参数键与运行摘要';
 COMMENT ON TABLE knowledge_bases IS '档案资料库中的知识库';
 COMMENT ON TABLE file_objects IS '对象存储中的物理文件索引';
@@ -393,3 +378,6 @@ CREATE TABLE IF NOT EXISTS product_certifications (
     source_material VARCHAR(255) NOT NULL,
     UNIQUE (product_id, certification, document_no)
 );
+
+-- 026：选品模式不使用岗位 JD
+DROP TABLE IF EXISTS job_descriptions;

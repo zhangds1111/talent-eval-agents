@@ -67,7 +67,7 @@ class DemoInterpreter:
     def __init__(self) -> None:
         self.calls: list[str] = []
 
-    def __call__(self, request_text: str, selected_job: dict | None = None) -> TalentRequestDraft:
+    def __call__(self, request_text: str) -> TalentRequestDraft:
         self.calls.append(request_text)
         if "筛选上海 5 年以上" in request_text:
             return TalentRequestDraft(
@@ -112,7 +112,6 @@ def run_verification() -> None:
     candidate_filter = DemoCandidateFilter()
     graph = build_talent_request_graph(
         request_interpreter=interpreter,
-        job_lookup=lambda query, context: [],
         candidate_filter=candidate_filter,
         checkpointer=InMemorySaver(),
     )

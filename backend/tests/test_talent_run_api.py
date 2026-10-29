@@ -18,24 +18,22 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 
-def _job_selection_manager() -> TalentRunManager:
+def _revision_manager() -> TalentRunManager:
     builder = StateGraph(dict)
 
-    def confirm_job(_: dict):
+    def await_input(_: dict):
         decision = interrupt(
             {
-                "type": "job_selection",
-                "question": "请选择岗位",
-                "options": [
-                    {"job_code": "JD-AI-001", "name": "高级 AI 应用工程师"}
-                ],
+                "type": "unsupported_selection",
+                "question": "请选择",
+                "options": [],
             }
         )
-        return {"selected": decision["job_code"]}
+        return {"selected": decision}
 
-    builder.add_node("confirm_job", confirm_job)
-    builder.add_edge(START, "confirm_job")
-    builder.add_edge("confirm_job", END)
+    builder.add_node("await_input", await_input)
+    builder.add_edge(START, "await_input")
+    builder.add_edge("await_input", END)
     return TalentRunManager(
         graph=builder.compile(checkpointer=InMemorySaver()),
         context=DecisionContext(
@@ -74,7 +72,7 @@ def _history_manager() -> TalentRunManager:
         )
     )
     return TalentRunManager(
-        graph=_job_selection_manager()._get_graph(),
+        graph=_revision_manager()._get_graph(),
         context=DecisionContext(tenant_id="course-demo", permission_scopes=("hr_private",)),
         record_store=store,
     )
@@ -116,7 +114,7 @@ def test_sse_frame_uses_protocol_id_type_and_json_envelope():
 
 
 def test_sse_endpoint_does_not_expose_replay_cursor_parameters():
-    app = create_app(talent_run_manager=_job_selection_manager())
+    app = create_app(talent_run_manager=_revision_manager())
 
     operation = app.openapi()["paths"]["/api/runs/{run_id}/events"]["get"]
     parameter_names = {parameter["name"] for parameter in operation["parameters"]}
@@ -126,7 +124,7 @@ def test_sse_endpoint_does_not_expose_replay_cursor_parameters():
 
 
 def test_create_run_returns_stream_location_and_cancel_is_idempotent():
-    app = create_app(talent_run_manager=_job_selection_manager())
+    app = create_app(talent_run_manager=_revision_manager())
     with TestClient(app) as client:
         created = client.post(
             "/api/runs",
@@ -170,12 +168,12 @@ def test_follow_up_message_reuses_conversation_and_creates_a_new_run():
     assert second_body["turn_no"] == 2
 
 
-def test_resume_rejects_unknown_choice():
-    app = create_app(talent_run_manager=_job_selection_manager())
+def test_resume_rejects_unsupported_interaction_type():
+    app = create_app(talent_run_manager=_revision_manager())
     with TestClient(app) as client:
         created = client.post(
             "/api/runs",
-            json={"message": "高级 AI 应用工程师"},
+            json={"message": "美国站露营灯"},
         ).json()
         run_id = created["run_id"]
 
@@ -190,7 +188,7 @@ def test_resume_rejects_unknown_choice():
         )
 
         assert response.status_code == 409
-        assert response.json()["detail"] == "请选择有效的候选商品"
+        assert response.json()["detail"] == "暂不支持的人工交互类型: unsupported_selection"
 
 
 def test_history_endpoints_return_saved_run_and_detail():

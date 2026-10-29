@@ -52,7 +52,7 @@ class HitlInterpreter:
     def __init__(self) -> None:
         self.calls: list[str] = []
 
-    def __call__(self, request_text: str, selected_job: dict | None = None) -> TalentRequestDraft:
+    def __call__(self, request_text: str) -> TalentRequestDraft:
         self.calls.append(request_text)
         if "上海或杭州 5 年以上" in request_text:
             return TalentRequestDraft(
@@ -100,7 +100,6 @@ def _context() -> DecisionContext:
 def _build(interpreter: HitlInterpreter, candidate_filter: StubCandidateFilter):
     return build_talent_request_graph(
         request_interpreter=interpreter,
-        job_lookup=lambda query, context: [],
         candidate_filter=candidate_filter,
         checkpointer=InMemorySaver(),
     )
@@ -163,52 +162,6 @@ def test_plan_block_and_empty_result_use_one_free_text_revision_node():
     assert resumed["status"] == "candidates_ready"
     final_state = graph.get_state(empty_config).values
     assert final_state["request_text"] == "筛选上海或杭州 5 年以上工作经验的人才"
-
-
-def test_job_profile_conflict_payload_uses_full_confirmed_job_content():
-    job_content = "负责 AI 应用研发，工作地点以上海或杭州为准，具体地点待确认"
-
-    class JobProfileInterpreter:
-        def __call__(self, request_text: str, selected_job: dict | None = None) -> TalentRequestDraft:
-            if selected_job is None:
-                return TalentRequestDraft(input_mode="job_name", job_query=request_text)
-            return TalentRequestDraft(
-                input_mode="job_name",
-                job_query=request_text,
-                clarifications=[
-                    Clarification(
-                        expression="工作地点以上海或杭州为准",
-                        reason="岗位画像没有确定唯一工作地点",
-                    )
-                ],
-            )
-
-    job = {
-        "job_code": "JD-AI-009",
-        "name": "AI 应用工程师",
-        "match_score": 1.0,
-        "match_type": "exact",
-        "version": 3,
-        "content": job_content,
-    }
-    graph = build_talent_request_graph(
-        request_interpreter=JobProfileInterpreter(),
-        job_lookup=lambda query, context: [job],
-        candidate_filter=StubCandidateFilter(),
-        checkpointer=InMemorySaver(),
-    )
-    config = {"configurable": {"thread_id": "hitl-job-profile-conflict"}}
-
-    interrupted = graph.invoke({"request_text": "AI 应用工程师"}, config, context=_context())
-    payload = interrupted["__interrupt__"][0].value
-
-    assert payload["request_text"] == job_content
-    assert payload["request_source"] == "job_profile"
-    assert payload["selected_job"] == {
-        "job_code": "JD-AI-009",
-        "name": "AI 应用工程师",
-        "version": 3,
-    }
 
 
 def test_stale_interaction_id_reasks_and_thread_stays_resumable():

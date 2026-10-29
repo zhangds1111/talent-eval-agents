@@ -34,8 +34,6 @@ class TalentDecisionEngineState(TypedDict, total=False):
     revision_summary: str
     conversation_title: str
     input_mode: str
-    job_matches: list[dict[str, Any]]
-    selected_job: dict[str, Any] | None
     talent_request: dict[str, Any]
     query_plan: dict[str, Any]
     candidate_ids: list[str]

@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from app.models import Base, EmployeeProfile, JobDescription
+from app.models import Base, EmployeeProfile
 from app.query_plan import FilterCondition
 from app.talent_tools import (
     CircuitBreaker,
@@ -31,18 +31,9 @@ if __name__ == "__main__":
     with Session(engine) as db:
         db.add_all(
             [
-                JobDescription(
-                    job_code="JD-AI-001",
-                    tenant_id="course-demo",
-                    name="高级 AI 应用工程师",
-                    content="负责企业知识库、Agent 应用与评测体系建设",
-                    version=2,
-                ),
                 EmployeeProfile(
-                    employee_no="C001", tenant_id="course-demo", name="林晓岚",
-                    birth_date=date(1993, 5, 1), region="上海",
-                    current_position="AI 应用工程师", job_level="L3",
-                    years_of_experience=7, department="技术中心",
+                    employee_no="SKU-DEMO-001", tenant_id="course-demo", name="演示露营灯（虚构）",
+                    region="美国", current_position="充电式露营灯", department="户外照明",
                 ),
             ]
         )
@@ -55,9 +46,9 @@ if __name__ == "__main__":
         run_id="verify-tools",
     )
     evidence_pack = {
-        "candidate_ids": ["C001"],
+        "candidate_ids": ["SKU-DEMO-001"],
         "evidence_packs": [
-            {"schema_version": "2.0", "candidate_id": "C001", "requirements": []}
+            {"schema_version": "2.0", "candidate_id": "SKU-DEMO-001", "requirements": []}
         ],
     }
     service = TalentToolService(
@@ -69,22 +60,18 @@ if __name__ == "__main__":
     tools = build_talent_tools(service, executor)
     print("[tool_names]", [item.name for item in tools])
     print(
-        "[job_lookup]",
-        json.dumps(service.lookup_job_descriptions("AI 应用工程师", context=context), ensure_ascii=False),
-    )
-    print(
         "[candidate_filter]",
         service.filter_candidates(
-            [FilterCondition(field="region", operator="eq", value="上海")], context=context
+            [FilterCondition(field="region", operator="eq", value="美国")], context=context
         ),
     )
     print(
         "[profile]",
-        json.dumps(service.get_candidate_profiles(["C001"], context=context), ensure_ascii=False),
+        json.dumps(service.get_candidate_profiles(["SKU-DEMO-001"], context=context), ensure_ascii=False),
     )
     print(
         "[evidence_schema]",
-        service.search_candidate_evidence("企业知识库经验", ["C001"], context=context)[
+        service.search_candidate_evidence("企业知识库经验", ["SKU-DEMO-001"], context=context)[
             "evidence_packs"
         ][0]["schema_version"],
     )
@@ -95,7 +82,7 @@ if __name__ == "__main__":
         attempts["count"] += 1
         if attempts["count"] < 3:
             raise TransientToolError("milvus_unavailable")
-        return {"candidate_ids": ["C001"]}
+        return {"candidate_ids": ["SKU-DEMO-001"]}
 
     retry_executor = ToolExecutor(
         policy=ToolPolicy(max_attempts=3, backoff_seconds=0), audit_sink=audit

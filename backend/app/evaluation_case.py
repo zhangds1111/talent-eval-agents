@@ -14,7 +14,6 @@ from app.models import EvaluationCaseRecord
 
 class EvaluationModule(StrEnum):
     REQUEST_UNDERSTANDING = "request_understanding"
-    JOB_MATCHING = "job_matching"
     DIMENSION_GENERATION = "dimension_generation"
     FACT_EXTRACTION = "fact_extraction"
 
@@ -98,7 +97,6 @@ def build_request_understanding_case(
     output_payload: dict[str, Any],
     replay_context: dict[str, Any],
     version_snapshot: dict[str, str],
-    selected_job: dict[str, Any] | None = None,
     status: Literal["succeeded", "failed"] = "succeeded",
     error_code: str | None = None,
     duration_ms: int | None = None,
@@ -119,7 +117,6 @@ def build_request_understanding_case(
             ],
             "previous_request": previous_request,
             "conversation_title": conversation_title,
-            "selected_job": selected_job,
         },
         output_payload=output_payload,
         replay_context=replay_context,

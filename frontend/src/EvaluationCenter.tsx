@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import {buildEvaluationCaseQuery} from './evaluationViewModel';
 import './evaluation.css';
 
-export const moduleLabels: Record<string, string> = {request_understanding: '选品需求理解', job_matching: '岗位 JD 匹配', dimension_generation: '动态维度生成', fact_extraction: '事实抽取'};
+export const moduleLabels: Record<string, string> = {request_understanding: '选品需求理解', dimension_generation: '动态维度生成', fact_extraction: '事实抽取'};
 type CaseRow = {annotation?: {score: number | null; review_status: string}; case_id: string; source_run_id: string; turn_no: number; module_key: string; invocation_no: number; status: string; created_at: string; identity: Record<string, string>; has_feedback: boolean; run_has_feedback: boolean};
 async function api(url: string, options?: RequestInit) {
   const r = await fetch(url, options);
@@ -33,7 +33,7 @@ export function StepCaseFeedback({apiBase, runId, stepId}: {apiBase: string; run
     let current = true;
     setRows([]); setError('');
     async function loadCases() {
-      const modules = stepId === 'understand_request' ? ['request_understanding', 'job_matching'] : stepId === 'build_dimensions' ? ['dimension_generation'] : stepId === 'parallel_assessment' ? ['fact_extraction'] : [];
+      const modules = stepId === 'understand_request' ? ['request_understanding'] : stepId === 'build_dimensions' ? ['dimension_generation'] : stepId === 'parallel_assessment' ? ['fact_extraction'] : [];
       if (!modules.length) return;
       const collected: CaseRow[] = [];
       let offset = 0;
