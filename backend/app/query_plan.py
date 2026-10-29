@@ -113,7 +113,7 @@ FILTER_FIELD_REGISTRY = {
     FilterField.JOB_LEVEL: _column_spec(EmployeeProfile.job_level, "内部等级编码，格式为 L1、L2 等", {"eq", "in"}),
     FilterField.YEARS_OF_EXPERIENCE: _column_spec(EmployeeProfile.years_of_experience, "评价数量等数值属性", {"eq", "lt", "lte", "gt", "gte"}),
     FilterField.CURRENT_POSITION: _column_spec(EmployeeProfile.current_position, "商品子类", {"eq", "in"}),
-    FilterField.EMPLOYMENT_STATUS: _column_spec(EmployeeProfile.employment_status, "商品状态", {"eq", "in"}),
+    FilterField.EMPLOYMENT_STATUS: _column_spec(EmployeeProfile.employment_status, "商品在售状态，取值仅 active 或 inactive；禁止写入是否带电、电池类型、认证等商品属性", {"eq", "in"}),
 }
 
 
