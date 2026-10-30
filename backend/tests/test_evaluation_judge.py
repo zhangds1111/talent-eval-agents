@@ -197,7 +197,7 @@ def test_replay_supports_every_collected_module(monkeypatch):
 
 
     class DimensionGenerator:
-        def __call__(self, talent_request, query_plan):
+        def __call__(self, product_request, query_plan):
             return j.EvaluationDimensionPlan(dimensions=[{
                 'name': '项目经验', 'definition': '核验项目经验', 'weight_percent': 100,
                 'evidence_requirements': ['存在项目证据'],
@@ -218,7 +218,7 @@ def test_replay_supports_every_collected_module(monkeypatch):
 
     monkeypatch.setattr(j, 'get_chat_model', lambda **kwargs: StructuredModel())
 
-    dimensions = SimpleNamespace(module_key='dimension_generation', input_payload={'talent_request': {}, 'query_plan': {}}, replay_context={})
+    dimensions = SimpleNamespace(module_key='dimension_generation', input_payload={'product_request': {}, 'query_plan': {}}, replay_context={})
     facts = SimpleNamespace(module_key='fact_extraction', input_payload={
         'requirement': '有 Agent 评测经验',
         'sources': [{'chunk_id': 'source_1', 'content': '负责 Agent 评测'}],
@@ -261,15 +261,15 @@ def test_replay_module_failure_counts_as_zero(client, monkeypatch):
 
 def test_run_groups_sort_by_completion_and_count_all_matching_cases(client):
     from app import evaluation_api as api
-    from app.models import TalentRunRecord, TalentConversationRecord, EvaluationCaseRecord
+    from app.models import ProductRunRecord, ProductConversationRecord, EvaluationCaseRecord
     from datetime import datetime, timezone, timedelta
     c, _ = client
     now = datetime.now(timezone.utc)
     with api.SessionLocal() as db:
-        db.add(TalentConversationRecord(conversation_id='group-conv', title='上海工程师', status='active', created_at=now, updated_at=now))
+        db.add(ProductConversationRecord(conversation_id='group-conv', title='上海工程师', status='active', created_at=now, updated_at=now))
         for index in range(11):
             rid = f'group-{index}'
-            db.add(TalentRunRecord(run_id=rid, conversation_id='group-conv', turn_no=index+1, message='test', status='completed', started_at=now, updated_at=now, completed_at=now+timedelta(minutes=index)))
+            db.add(ProductRunRecord(run_id=rid, conversation_id='group-conv', turn_no=index+1, message='test', status='completed', started_at=now, updated_at=now, completed_at=now+timedelta(minutes=index)))
             for invocation in range(1, 13):
                 db.add(EvaluationCaseRecord(source_run_id=rid, conversation_id='group-conv', turn_no=index+1, module_key='dimension_generation', invocation_no=invocation, input_payload={}, output_payload={}))
         db.commit()

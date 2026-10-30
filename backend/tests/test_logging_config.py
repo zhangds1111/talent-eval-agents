@@ -31,7 +31,7 @@ def test_configure_logging_replaces_handlers_without_duplication(tmp_path):
     managed_handlers = [
         handler
         for handler in logging.getLogger().handlers
-        if getattr(handler, "talent_logging_handler", False)
+        if getattr(handler, "product_logging_handler", False)
     ]
 
     assert len(managed_handlers) == 3

@@ -21,7 +21,7 @@ from app.query_plan import (
 
 def _plan(*filters, clarifications=None):
     return QueryPlan(
-        task_type="find_talent",
+        task_type="find_product",
         filters=list(filters),
         semantic_requirements=[SemanticRequirement(requirement_id="S1", query="AI 项目工作经历")],
         clarifications=clarifications or [],
@@ -69,7 +69,7 @@ def test_empty_candidate_set_stops_before_semantic_search():
 
 def test_each_semantic_requirement_keeps_its_own_evidence():
     plan = QueryPlan(
-        task_type="find_talent",
+        task_type="find_product",
         semantic_requirements=[
             {"requirement_id": "S1", "query": "AI 项目经历"},
             {"requirement_id": "S2", "query": "团队管理经历"},

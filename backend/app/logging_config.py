@@ -23,7 +23,7 @@ class DailyFileHandler(logging.Handler):
         self.date_provider = date_provider
         self._active_date: date | None = None
         self._file_handler: logging.FileHandler | None = None
-        self.talent_logging_handler = True
+        self.product_logging_handler = True
 
     def _ensure_file_handler(self) -> logging.FileHandler:
         current_date = self.date_provider()
@@ -70,14 +70,14 @@ def configure_logging(
     root_logger.setLevel(logging.INFO)
 
     for handler in list(root_logger.handlers):
-        if getattr(handler, "talent_logging_handler", False):
+        if getattr(handler, "product_logging_handler", False):
             root_logger.removeHandler(handler)
             handler.close()
 
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
-    console_handler.talent_logging_handler = True
+    console_handler.product_logging_handler = True
 
     service_handler = DailyFileHandler(directory, safe_service_name, date_provider)
     service_handler.setLevel(logging.INFO)

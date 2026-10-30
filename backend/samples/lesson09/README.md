@@ -8,7 +8,7 @@
 
 ## 文件与生成顺序
 
-`review.md`、`report.md` 和 `interview.md` 是输入材料，当前目录的 `README.md` 只做说明。验证脚本读取三份材料并创建 `DocumentChunk`，`DemoStore` 再把它们转换成与真实 Milvus 召回结果字段一致的 `EvidenceSearchResult`，随后调用真实的 `/api/talent-search` 和证据加工模块。
+`review.md`、`report.md` 和 `interview.md` 是输入材料，当前目录的 `README.md` 只做说明。验证脚本读取三份材料并创建 `DocumentChunk`，`DemoStore` 再把它们转换成与真实 Milvus 召回结果字段一致的 `EvidenceSearchResult`，随后调用真实的 `/api/product-search` 和证据加工模块。
 
 ```text
 samples/lesson09/*.md

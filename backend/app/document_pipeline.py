@@ -27,7 +27,7 @@ def queue_parse_job(db: Session, redis_client: Redis | Any, version_id: UUID) ->
     job = ParseJob(document_version_id=version_id, parser_name="queued", status=ParseStatus.PENDING)
     db.add(job)
     db.commit()
-    redis_client.rpush("talent:parse:queue", f"{job.id}:{version_id}")
+    redis_client.rpush("product:parse:queue", f"{job.id}:{version_id}")
     return job
 
 
@@ -40,7 +40,7 @@ def queue_index_job(db: Session, redis_client: Redis | Any, version_id: UUID, *,
     )
     db.add(job)
     db.commit()
-    redis_client.rpush("talent:index:queue", f"{job.id}:{version_id}")
+    redis_client.rpush("product:index:queue", f"{job.id}:{version_id}")
     return job
 
 

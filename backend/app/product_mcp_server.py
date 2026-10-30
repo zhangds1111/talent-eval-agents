@@ -11,14 +11,14 @@ from mcp.server.mcpserver.exceptions import ResourceNotFoundError
 from pydantic import Field
 
 from app.query_plan import FilterCondition
-from app.talent_tools import TalentToolContext, TalentToolService, ToolExecutor
+from app.product_tools import ProductToolContext, ProductToolService, ToolExecutor
 
 
-ContextProvider = Callable[[], TalentToolContext]
+ContextProvider = Callable[[], ProductToolContext]
 REQUIRED_SCOPE = "product:read"
 
 
-def product_context_from_token(token: AccessToken) -> TalentToolContext:
+def product_context_from_token(token: AccessToken) -> ProductToolContext:
     claims = token.claims or {}
     tenant_id = str(claims.get("tenant_id", "")).strip()
     raw_permission_scopes = claims.get("permission_scopes", [])
@@ -31,7 +31,7 @@ def product_context_from_token(token: AccessToken) -> TalentToolContext:
         raise PermissionError("Access Token 缺少 tenant_id")
     if not permission_scopes:
         raise PermissionError("Access Token 缺少 permission_scopes")
-    return TalentToolContext(
+    return ProductToolContext(
         tenant_id=tenant_id,
         permission_scopes=permission_scopes,
         actor_id=token.subject or token.client_id,
@@ -39,7 +39,7 @@ def product_context_from_token(token: AccessToken) -> TalentToolContext:
     )
 
 
-def authenticated_product_context() -> TalentToolContext:
+def authenticated_product_context() -> ProductToolContext:
     token = get_access_token()
     if token is None:
         raise PermissionError("缺少经过验证的 MCP Access Token")
@@ -47,7 +47,7 @@ def authenticated_product_context() -> TalentToolContext:
 
 
 def build_product_mcp_server(
-    service: TalentToolService,
+    service: ProductToolService,
     executor: ToolExecutor,
     *,
     context_provider: ContextProvider,

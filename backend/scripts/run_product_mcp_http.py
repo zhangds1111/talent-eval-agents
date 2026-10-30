@@ -13,7 +13,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.product_mcp_server import build_product_mcp_server  # noqa: E402
-from app.talent_tools import ToolExecutor  # noqa: E402
+from app.product_tools import ToolExecutor  # noqa: E402
 from scripts.verify_product_mcp import build_demo_service, demo_context  # noqa: E402
 
 

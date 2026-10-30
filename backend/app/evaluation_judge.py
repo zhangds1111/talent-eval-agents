@@ -5,13 +5,13 @@ from pydantic import BaseModel, Field, ValidationError
 from langchain.messages import HumanMessage, AIMessage, SystemMessage
 from app.model_provider import get_chat_model, get_judge_model
 from app.prompt_sanitizer import sanitize_prompt
-from app.talent_request_graph import (
-    TalentRequestUnderstanding,
+from app.product_request_graph import (
+    ProductRequestUnderstanding,
     model_request_interpreter,
     MODEL_SYSTEM_PROMPT,
 )
 from app.query_plan import filter_dsl_catalog
-from app.talent_evaluation_dispatch import (
+from app.product_evaluation_dispatch import (
     DIMENSION_GENERATOR_PROMPT,
     EvaluationDimensionPlan,
     build_structured_dimension_generator,
@@ -26,7 +26,7 @@ TASK_SPECS = {
 }
 
 def output_schema(module_key):
-    return {'request_understanding': TalentRequestUnderstanding,
+    return {'request_understanding': ProductRequestUnderstanding,
             'dimension_generation': EvaluationDimensionPlan, 'fact_extraction': EvidenceExtraction}[module_key]
 
 class JudgeResponse(BaseModel):
@@ -100,7 +100,7 @@ def replay_request_understanding(item):
 
 def replay_dimension_generation(item):
     generator = build_structured_dimension_generator(get_chat_model)
-    result = generator(item.input_payload['talent_request'], item.input_payload['query_plan'])
+    result = generator(item.input_payload['product_request'], item.input_payload['query_plan'])
     return EvaluationDimensionPlan.model_validate(result).model_dump(mode='json')
 
 

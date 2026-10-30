@@ -19,7 +19,7 @@ import {
 import { EvidencePackPanel } from "./EvidencePackPanel";
 import { EvaluationCenter } from "./EvaluationCenter";
 import { Dashboard } from "./Dashboard";
-import { TalentChatPage } from "./TalentChatPage";
+import { ProductChatPage } from "./ProductChatPage";
 import "./style.css";
 import "./refinements.css";
 
@@ -726,7 +726,7 @@ function App() {
 
   if (productSection === "chat") {
     return (
-      <TalentChatPage
+      <ProductChatPage
         apiBase={API}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed((value) => !value)}
@@ -755,9 +755,9 @@ function App() {
     <div className={`app${sidebarCollapsed ? " sidebarCollapsed" : ""}`}>
       <aside className="side">
         <div className="brand">
-          <img src="/talentos-favicon.png" alt="TalentOS" />
+          <img src="/productos-favicon.png" alt="ProductOS" />
           <div>
-            <b>智鉴 TalentOS</b>
+            <b>智鉴 ProductOS</b>
             <small>多 AGENT 选品评估平台</small>
           </div>
         </div>

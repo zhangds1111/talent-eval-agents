@@ -5,7 +5,7 @@ from sqlalchemy import delete
 from app.database import SessionLocal
 from app.models import EvaluationCaseRecord
 from app import evaluation_case as ec
-from app.talent_decision_graph import DecisionContext
+from app.product_decision_graph import DecisionContext
 
 
 def test_parallel_invocations_are_unique():
@@ -40,9 +40,9 @@ def test_capture_failure_preserves_business_error_and_input():
 
 
 def test_tool_worker_preserves_extraction_identity():
-    from app.talent_tools import ToolExecutor, TalentToolContext
+    from app.product_tools import ToolExecutor, ProductToolContext
     context = DecisionContext(tenant_id='course-demo', permission_scopes=('hr_private',), run_id='real-run')
-    tool_context = TalentToolContext(tenant_id='course-demo', permission_scopes=('hr_private',), actor_id='test', run_id='task')
+    tool_context = ProductToolContext(tenant_id='course-demo', permission_scopes=('hr_private',), actor_id='test', run_id='task')
     with ec.extraction_scope(context, candidate_id='C001', requirement_id='1:1'):
         result = ToolExecutor().execute('search_candidate_evidence',
             lambda: {'identity': ec.current_extraction_scope()[1]}, context=tool_context, arguments={})

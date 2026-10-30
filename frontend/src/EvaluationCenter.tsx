@@ -126,7 +126,7 @@ export function EvaluationCenter({apiBase, onDashboard, onChat, onRecords, sideb
     setGroupByRun(checked);
   }
   return <div className={`app evaluationApp${sidebarCollapsed?' sidebarCollapsed':''}`}>
-    <aside className="side"><div className="brand"><img src="/talentos-favicon.png" alt="TalentOS"/><div><b>智鉴 TalentOS</b><small>多 AGENT 选品评估平台</small></div></div><nav>
+    <aside className="side"><div className="brand"><img src="/productos-favicon.png" alt="ProductOS"/><div><b>智鉴 ProductOS</b><small>多 AGENT 选品评估平台</small></div></div><nav>
       <button onClick={onDashboard}><LayoutGrid/><span>工作台</span></button><button onClick={onRecords}><UserSquare2/><span>商品档案</span></button><button onClick={onChat}><Sparkles/><span>评估与推荐</span></button><button className="active"><FlaskConical/><span>评测中心</span></button>
     </nav><div className="env"><div><i/><b>测试环境</b></div><small>服务正常 · V1.0</small></div><button type="button" className="sideToggle" onClick={onToggleSidebar} aria-label={sidebarCollapsed?'展开导航栏':'收起导航栏'} aria-expanded={!sidebarCollapsed}>{sidebarCollapsed?<ChevronRight/>:<ChevronLeft/>}</button></aside>
     <main className="evaluationMain"><header><div><span>评测中心</span><ChevronRight/><b>{tab==='cases'?'评测样例':'数据集'}</b></div><div className="currentUser"><b>Will</b><span>W</span></div></header>

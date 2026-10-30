@@ -127,8 +127,8 @@ class ToolCallAudit(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class TalentRunRecord(Base):
-    __tablename__ = "talent_runs"
+class ProductRunRecord(Base):
+    __tablename__ = "product_runs"
 
     run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     conversation_id: Mapped[str] = mapped_column(String(64), index=True)
@@ -144,8 +144,8 @@ class TalentRunRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
-class TalentConversationRecord(Base):
-    __tablename__ = "talent_conversations"
+class ProductConversationRecord(Base):
+    __tablename__ = "product_conversations"
 
     conversation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     title: Mapped[str] = mapped_column(String(255))
@@ -155,13 +155,13 @@ class TalentConversationRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
-class TalentRunStepRecord(Base):
-    __tablename__ = "talent_run_steps"
-    __table_args__ = (UniqueConstraint("run_id", "step_id", name="uq_talent_run_step"),)
+class ProductRunStepRecord(Base):
+    __tablename__ = "product_run_steps"
+    __table_args__ = (UniqueConstraint("run_id", "step_id", name="uq_product_run_step"),)
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     run_id: Mapped[str] = mapped_column(
-        ForeignKey("talent_runs.run_id", ondelete="CASCADE"),
+        ForeignKey("product_runs.run_id", ondelete="CASCADE"),
         index=True,
     )
     step_id: Mapped[str] = mapped_column(String(64))
@@ -388,7 +388,7 @@ class EvidenceIndexJob(Base):
 class EvaluationFeedbackRecord(Base):
     __tablename__ = 'evaluation_feedback'
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    source_run_id: Mapped[str] = mapped_column(ForeignKey('talent_runs.run_id'), index=True)
+    source_run_id: Mapped[str] = mapped_column(ForeignKey('product_runs.run_id'), index=True)
     case_id: Mapped[UUID | None] = mapped_column(ForeignKey('evaluation_cases.id'), index=True)
     feedback_scope: Mapped[str] = mapped_column(String(16))
     note: Mapped[str] = mapped_column(Text, default='')

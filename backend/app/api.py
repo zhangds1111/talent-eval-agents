@@ -41,8 +41,8 @@ from app.models import (
     KnowledgeBase,
     ParseArtifact,
     ParseJob,
-    TalentConversationRecord,
-    TalentRunRecord,
+    ProductConversationRecord,
+    ProductRunRecord,
 )
 from app.object_store import ObjectStore
 from app.services import current_version, parse_version, upload_document
@@ -56,8 +56,8 @@ def dashboard_metrics(db: Session = Depends(get_db)) -> dict[str, int]:
     return {
         "employee_count": db.scalar(select(func.count()).select_from(EmployeeProfile)) or 0,
         "document_count": db.scalar(select(func.count()).select_from(Document)) or 0,
-        "conversation_count": db.scalar(select(func.count()).select_from(TalentConversationRecord)) or 0,
-        "run_count": db.scalar(select(func.count()).select_from(TalentRunRecord)) or 0,
+        "conversation_count": db.scalar(select(func.count()).select_from(ProductConversationRecord)) or 0,
+        "run_count": db.scalar(select(func.count()).select_from(ProductRunRecord)) or 0,
         "case_count": db.scalar(select(func.count()).select_from(EvaluationCaseRecord)) or 0,
         "dataset_count": db.scalar(select(func.count()).select_from(EvaluationDatasetItemRecord)) or 0,
     }
@@ -124,7 +124,7 @@ class QueryPlanInput(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
 
 
-class TalentSearchInput(BaseModel):
+class ProductSearchInput(BaseModel):
     include_evidence_pack: bool = False
     query: str = Field(min_length=1, max_length=2000)
     retrieval_mode: Literal["standard", "auto_optimize"] = "standard"
@@ -391,7 +391,7 @@ def parse_document_endpoint(document_id: UUID, async_mode: bool = True, db: Sess
             Redis.from_url(get_settings().redis_url, decode_responses=True),
             version.id,
         )
-        logger.info("parse_job_queued document_id=%s version_id=%s job_id=%s queue=talent:parse:queue", document_id, version.id, job.id)
+        logger.info("parse_job_queued document_id=%s version_id=%s job_id=%s queue=product:parse:queue", document_id, version.id, job.id)
         return {"id": job.id, "status": job.status, "parser_name": job.parser_name, "error_message": None}
     job = parse_version(db, ObjectStore(), version.id)
     logger.info("parse_sync_completed document_id=%s version_id=%s job_id=%s status=%s", document_id, version.id, job.id, job.status)
@@ -602,8 +602,8 @@ def hybrid_search_evidence(
     ]
 
 
-@router.post("/talent-search/plan")
-def create_talent_query_plan(payload: QueryPlanInput):
+@router.post("/product-search/plan")
+def create_product_query_plan(payload: QueryPlanInput):
     model = get_chat_model(temperature=0)
     if model is None:
         raise HTTPException(503, "查询计划模型未配置")
@@ -614,8 +614,8 @@ def create_talent_query_plan(payload: QueryPlanInput):
         raise HTTPException(503, f"查询计划生成失败: {exc}") from exc
 
 
-@router.post("/talent-search/candidates")
-def query_talent_candidates(
+@router.post("/product-search/candidates")
+def query_product_candidates(
     plan: QueryPlan,
     x_tenant_id: str = Header(...),
     db: Session = Depends(get_db),
@@ -629,9 +629,9 @@ def query_talent_candidates(
     return {"candidate_ids": candidate_ids, "candidate_count": len(candidate_ids), "semantic_requirements": plan.semantic_requirements}
 
 
-@router.post("/talent-search")
-def search_talent(
-    payload: TalentSearchInput,
+@router.post("/product-search")
+def search_product(
+    payload: ProductSearchInput,
     x_tenant_id: str = Header(...),
     x_permission_scopes: str = Header(...),
     db: Session = Depends(get_db),
@@ -738,7 +738,7 @@ def search_talent(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception("talent_search_failed tenant_id=%s", x_tenant_id)
+        logger.exception("product_search_failed tenant_id=%s", x_tenant_id)
         raise HTTPException(503, f"商品检索失败: {exc}") from exc
 
 
@@ -750,7 +750,7 @@ def retry_job(job_id: UUID, db: Session = Depends(get_db)):
     job = ParseJob(document_version_id=old.document_version_id, parser_name="queued", retry_count=old.retry_count + 1)
     db.add(job)
     db.commit()
-    Redis.from_url(get_settings().redis_url, decode_responses=True).rpush("talent:parse:queue", f"{job.id}:{job.document_version_id}")
+    Redis.from_url(get_settings().redis_url, decode_responses=True).rpush("product:parse:queue", f"{job.id}:{job.document_version_id}")
     logger.info("parse_job_retried previous_job_id=%s new_job_id=%s version_id=%s retry_count=%s", old.id, job.id, job.document_version_id, job.retry_count)
     return {"id": job.id, "status": job.status, "retry_count": job.retry_count}
 
@@ -772,7 +772,7 @@ def retry_index_job(job_id: UUID, db: Session = Depends(get_db)):
     db.add(job)
     db.commit()
     Redis.from_url(get_settings().redis_url, decode_responses=True).rpush(
-        "talent:index:queue", f"{job.id}:{job.document_version_id}"
+        "product:index:queue", f"{job.id}:{job.document_version_id}"
     )
     logger.info(
         "evidence_index_job_retried previous_job_id=%s new_job_id=%s retry_count=%s",

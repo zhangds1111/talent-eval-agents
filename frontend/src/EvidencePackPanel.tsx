@@ -37,7 +37,7 @@ export function EvidencePackPanel({ api, tenant }: { api: string; tenant: string
   async function search() {
     setBusy(true); setError(''); setMessage(''); setPacks([]); setCitation(null);
     try {
-      const data = await read('/talent-search', { method: 'POST', body: JSON.stringify({ query, include_evidence_pack: true, limit: 8 }) });
+      const data = await read('/product-search', { method: 'POST', body: JSON.stringify({ query, include_evidence_pack: true, limit: 8 }) });
       setPacks(data.evidence_packs);
       if (!data.candidate_ids.length) setMessage('当前结构化条件下没有候选商品');
       else if (data.evidence_status === 'not_requested') setMessage('查询未包含需要材料取证的要求');

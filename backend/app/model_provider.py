@@ -43,7 +43,7 @@ if __name__ == "__main__":
     # res = model.invoke(
     #         [("user", "你是什么模型？")]
     #     )
-    from app.talent_evaluation_dispatch import EvaluationDimensionPlan, DIMENSION_GENERATOR_PROMPT
+    from app.product_evaluation_dispatch import EvaluationDimensionPlan, DIMENSION_GENERATOR_PROMPT
 
     res = model.with_structured_output(EvaluationDimensionPlan).invoke(
                 [

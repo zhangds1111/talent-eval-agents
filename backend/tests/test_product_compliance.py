@@ -75,7 +75,7 @@ def test_gross_margin_filter_is_sql_computed(session_factory):
     from app.query_plan import FilterCondition, QueryPlan, TaskType, select_candidate_ids
 
     plan = QueryPlan(
-        task_type=TaskType.FIND_TALENT,
+        task_type=TaskType.FIND_PRODUCT,
         filters=[
             FilterCondition(field="region", operator="eq", value="美国"),
             FilterCondition(field="department", operator="eq", value="户外照明"),
@@ -97,7 +97,7 @@ def test_price_filter_rejects_non_numeric_operator():
 
 def test_ranking_puts_certification_gaps_after_and_report_renders_program_facts():
     from app.product_compliance import CertificationCheck, ProductFacts
-    from app.talent_evaluation_report import CandidateAssessment, _render_product_facts, rank_candidate_assessments
+    from app.product_evaluation_report import CandidateAssessment, _render_product_facts, rank_candidate_assessments
 
     def candidate(cid, score, statuses):
         facts = ProductFacts(
@@ -123,7 +123,7 @@ def test_ranking_puts_certification_gaps_after_and_report_renders_program_facts(
 def test_market_aliases_are_normalized_before_sql(session_factory):
     from app.query_plan import FilterCondition, QueryPlan, TaskType, select_candidate_ids
 
-    plan = QueryPlan(task_type=TaskType.FIND_TALENT, filters=[
+    plan = QueryPlan(task_type=TaskType.FIND_PRODUCT, filters=[
         FilterCondition(field="region", operator="eq", value="US"),
         FilterCondition(field="gross_margin_percent", operator="gte", value=40),
     ])

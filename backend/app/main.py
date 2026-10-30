@@ -11,9 +11,9 @@ from app.evaluation_api import router as evaluation_router
 from app.config import get_settings
 from app.database import SessionLocal
 from app.logging_config import configure_logging
-from app.talent_run_api import conversation_router, router as talent_run_router
-from app.talent_run_history import SqlTalentRunHistoryStore
-from app.talent_run_stream import TalentRunManager
+from app.product_run_api import conversation_router, router as product_run_router
+from app.product_run_history import SqlProductRunHistoryStore
+from app.product_run_stream import ProductRunManager
 
 
 settings = get_settings()
@@ -21,9 +21,9 @@ configure_logging(settings.log_dir, settings.service_name)
 logger = logging.getLogger(__name__)
 
 
-def create_app(*, talent_run_manager: TalentRunManager | None = None) -> FastAPI:
-    manager = talent_run_manager or TalentRunManager(
-        record_store=SqlTalentRunHistoryStore(SessionLocal)
+def create_app(*, product_run_manager: ProductRunManager | None = None) -> FastAPI:
+    manager = product_run_manager or ProductRunManager(
+        record_store=SqlProductRunHistoryStore(SessionLocal)
     )
 
     @asynccontextmanager
@@ -35,7 +35,7 @@ def create_app(*, talent_run_manager: TalentRunManager | None = None) -> FastAPI
             await manager.shutdown()
 
     app = FastAPI(title="选品材料解析 API", version="0.1.0", lifespan=lifespan)
-    app.state.talent_run_manager = manager
+    app.state.product_run_manager = manager
     app.add_middleware(
         CORSMiddleware,
         allow_origins=get_settings().cors_origins.split(","),
@@ -71,11 +71,11 @@ def create_app(*, talent_run_manager: TalentRunManager | None = None) -> FastAPI
     @app.get("/api/health")
     def health() -> dict[str, str]:
         logger.info("health_check status=ok")
-        return {"service": "talent-document-api", "status": "ok"}
+        return {"service": "product-document-api", "status": "ok"}
 
     app.include_router(router)
     app.include_router(evaluation_router)
-    app.include_router(talent_run_router)
+    app.include_router(product_run_router)
     app.include_router(conversation_router)
     return app
 

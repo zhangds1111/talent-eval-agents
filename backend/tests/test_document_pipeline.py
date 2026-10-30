@@ -45,7 +45,7 @@ def test_queue_parse_job_creates_pending_job_and_pushes_parse_queue():
     assert job.document_version_id == version_id
     assert job.status == ParseStatus.PENDING
     assert fake_db.commits == 1
-    assert fake_redis.items == [("talent:parse:queue", f"{job.id}:{version_id}")]
+    assert fake_redis.items == [("product:parse:queue", f"{job.id}:{version_id}")]
 
 
 def test_continue_document_pipeline_creates_chunk_run_and_queues_index_job(monkeypatch):
@@ -80,4 +80,4 @@ def test_continue_document_pipeline_creates_chunk_run_and_queues_index_job(monke
     assert seen["chunk_size"] == document_pipeline.DEFAULT_CHUNK_SIZE
     assert seen["chunk_overlap"] == document_pipeline.DEFAULT_CHUNK_OVERLAP
     assert job.status == IndexStatus.PENDING
-    assert fake_redis.items == [("talent:index:queue", f"{job.id}:{version.id}")]
+    assert fake_redis.items == [("product:index:queue", f"{job.id}:{version.id}")]

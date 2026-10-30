@@ -13,7 +13,7 @@ from app.models import EmployeeProfile, ProductAttributes
 
 
 class TaskType(StrEnum):
-    FIND_TALENT = "find_talent"
+    FIND_PRODUCT = "find_product"
     LOOKUP_PROFILE = "lookup_profile"
 
 

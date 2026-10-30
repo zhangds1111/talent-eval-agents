@@ -1,6 +1,6 @@
 {
   "query_plan": {
-    "task_type": "find_talent",
+    "task_type": "find_product",
     "filters": [
       {
         "field": "region",

@@ -20,7 +20,7 @@ def run() -> None:
     settings = get_settings()
     configure_logging(settings.log_dir, "worker")
     redis = Redis.from_url(settings.redis_url, decode_responses=True, socket_timeout=15)
-    queues = ["talent:parse:queue", "talent:index:queue"]
+    queues = ["product:parse:queue", "product:index:queue"]
     logger.info("worker_started queues=%s", ",".join(queues))
     while True:
         try:
@@ -28,7 +28,7 @@ def run() -> None:
         except TimeoutError:
             continue
         except Exception:
-            logger.exception("worker_queue_read_failed queue=talent:parse:queue")
+            logger.exception("worker_queue_read_failed queue=product:parse:queue")
             raise
         if not item:
             continue
@@ -36,7 +36,7 @@ def run() -> None:
         job_id, version_id = payload.split(":", 1)
         logger.info("worker_job_received queue=%s job_id=%s version_id=%s", queue_name, job_id, version_id)
         with SessionLocal() as db:
-            if queue_name == "talent:index:queue":
+            if queue_name == "product:index:queue":
                 job = run_index_job(db, UUID(job_id), UUID(version_id))
                 logger.info("worker_index_job_completed job_id=%s status=%s indexed_count=%s", job.id, job.status, job.indexed_count)
             else:

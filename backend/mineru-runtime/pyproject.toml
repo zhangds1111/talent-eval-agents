@@ -1,7 +1,7 @@
 [project]
-name = "talent-mineru-runtime"
+name = "product-mineru-runtime"
 version = "0.1.0"
-description = "Local private MinerU runtime for complex talent documents"
+description = "Local private MinerU runtime for complex product documents"
 requires-python = ">=3.12,<3.13"
 dependencies = ["mineru[core]>=2.6.4"]
 

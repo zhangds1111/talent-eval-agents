@@ -10,7 +10,7 @@
 | `database/init.sql` | PostgreSQL 完整建表 SQL |
 | `database/migrations/005_chunking.sql` | 第 4 课到第 5 课的唯一幂等增量迁移 |
 | `database/migrations/007_milvus_evidence_index.sql` | 第 6 课 Milvus 索引任务表的幂等增量迁移 |
-| `database/migrations/012_talent_tools.sql` | 第 12 课岗位 JD 与人才工具调用审计表的幂等增量迁移 |
+| `database/migrations/012_product_tools.sql` | 第 12 课岗位 JD 与人才工具调用审计表的幂等增量迁移 |
 | `database/migrations/020_run_history.sql` | 第 20 课 Run 与步骤历史表的幂等增量迁移 |
 | `database/migrations/021_conversation_history.sql` | 第 21 课会话列表投影的幂等增量迁移 |
 | `frontend/` | React 前端 |
@@ -20,9 +20,9 @@
 
 前端是多 Agent 人才评估与推荐系统的统一应用壳层。人才档案模块包含员工花名册、档案资料库和证据召回验收台，评估与推荐模块提供多轮人才要求、SSE 修订反馈、运行步骤、HITL、Markdown 报告、证据回查和按状态筛选的会话列表。后端使用 `AsyncPostgresSaver` 保存 Graph State，Run 与会话 API 负责实时事件、人工恢复、幂等取消和历史读模型查询
 
-多轮入口继续使用 `POST /api/runs`，后续请求携带同一 `conversation_id`。父图 `_begin_turn` 返回局部更新，保留消息、当前输入、完整要求和标题，仅清理运行产物。请求子图输入显式声明 `messages`、`request_text`、`talent_request`、`conversation_title`，人工澄清也作为消息返回父图。首次理解生成标题，后续模型使用不含标题字段的修订 Schema。`requirement.revised` 的 `data` 只包含 `action`、`summary`。持久化 Run 的轮次从历史记录递增，后端重启后继续原会话不会重置编号
+多轮入口继续使用 `POST /api/runs`，后续请求携带同一 `conversation_id`。父图 `_begin_turn` 返回局部更新，保留消息、当前输入、完整要求和标题，仅清理运行产物。请求子图输入显式声明 `messages`、`request_text`、`product_request`、`conversation_title`，人工澄清也作为消息返回父图。首次理解生成标题，后续模型使用不含标题字段的修订 Schema。`requirement.revised` 的 `data` 只包含 `action`、`summary`。持久化 Run 的轮次从历史记录递增，后端重启后继续原会话不会重置编号
 
-报告输出出现 Pydantic 结构校验错误时，报告写作器将校验信息交回模型纠正一次；再次失败仍上报错误，不截断证据或放宽引用校验。相关回归覆盖 `tests/test_talent_conversation.py`、`tests/test_talent_run_stream.py` 和 `tests/test_talent_evaluation_report.py`，在 `backend/` 执行 `uv run pytest -q`
+报告输出出现 Pydantic 结构校验错误时，报告写作器将校验信息交回模型纠正一次；再次失败仍上报错误，不截断证据或放宽引用校验。相关回归覆盖 `tests/test_product_conversation.py`、`tests/test_product_run_stream.py` 和 `tests/test_product_evaluation_report.py`，在 `backend/` 执行 `uv run pytest -q`
 
 ## 选品评估模式（第 1 阶段）
 
@@ -52,7 +52,7 @@
 
 ### 链路如何流转
 
-1. 需求理解：模型把自然语言需求编译为 `TalentRequestDraft`（硬条件进 `filters`，认证/口碑类要求进 `semantic_requirements`，偏好进 `evaluation_preferences`），随后 `build_plan` 生成 `QueryPlan`；歧义或冲突会触发澄清 interrupt。
+1. 需求理解：模型把自然语言需求编译为 `ProductRequestDraft`（硬条件进 `filters`，认证/口碑类要求进 `semantic_requirements`，偏好进 `evaluation_preferences`），随后 `build_plan` 生成 `QueryPlan`；歧义或冲突会触发澄清 interrupt。
 2. 筛选 SKU：`filter_candidates` 按 `QueryPlan.filters` 在候选商品表中精确过滤；0 结果时通过 leave-one-out 诊断定位卡死条件并 interrupt 让用户放宽。
 3. 动态维度 → 证据检索与并行评估 → 维度评分（0/3/5 锚点）→ 一致性审查 → 报告合成：各环节提示词均为选品语境，证据抽取关注证书编号、有效期、适用型号，并区分卖家声明与检测报告。
 4. 报告只表述「有证据/缺证据」及证据所示事实，不下合规结论；结论均可回溯到商品原始材料。
@@ -168,9 +168,9 @@ docker compose -p talent-eval-agents-course --profile app up -d --build
 | `POST /api/documents/{id}/evidence-index` | 为当前文档版本手动创建异步 Milvus 索引任务 |
 | `POST /api/evidence/search` | 按租户、权限范围和业务条件检索人才证据，并返回来源材料与候选人上下文（纯向量） |
 | `POST /api/evidence/hybrid-search` | 稠密 + BM25 双路召回、RRF 融合、Rerank 精排的证据检索 |
-| `POST /api/talent-search/plan` | 把自然语言人才需求编译为受控 Query Plan |
-| `POST /api/talent-search/candidates` | 校验 Query Plan，并用确定性 SQL Builder 返回候选人编号集合 |
-| `POST /api/talent-search` | 输入自然语言查询，依次执行 Query Plan、SQL 候选筛选、混合检索和可选查询优化，返回 Chunk 列表 |
+| `POST /api/product-search/plan` | 把自然语言人才需求编译为受控 Query Plan |
+| `POST /api/product-search/candidates` | 校验 Query Plan，并用确定性 SQL Builder 返回候选人编号集合 |
+| `POST /api/product-search` | 输入自然语言查询，依次执行 Query Plan、SQL 候选筛选、混合检索和可选查询优化，返回 Chunk 列表 |
 | `POST /api/index-jobs/{id}/retry` | 为失败的 Milvus 索引任务创建新的幂等重试任务 |
 | `POST /api/runs` | 创建人才评估 Run |
 | `GET /api/runs/{id}/events` | 订阅当前 Run 的 SSE 事件 |
@@ -183,13 +183,13 @@ docker compose -p talent-eval-agents-course --profile app up -d --build
 |---|---|
 | `backend/app/query_plan.py` | Query Plan、Filter DSL 注册表、自然语言结构化输出、SQLAlchemy 查询构造与查询优化计划 |
 | `backend/tests/test_query_plan.py` | DSL 提示词、字段白名单、参数化 SQL、年龄边界、待澄清条件、空候选集和优化策略测试 |
-| `backend/tests/test_talent_search_api.py` | 从 HTTP 请求到 Chunk 响应的端到端接口测试，覆盖标准检索与首轮为空后的自动优化检索 |
+| `backend/tests/test_product_search_api.py` | 从 HTTP 请求到 Chunk 响应的端到端接口测试，覆盖标准检索与首轮为空后的自动优化检索 |
 
-查询计划把结构化硬条件、语义条件、偏好和待澄清条件分开。Pydantic Schema 提供输出结构，`FILTER_FIELD_REGISTRY` 同时维护字段说明、允许操作符和 SQL 构造函数，并生成提示词中的 Filter DSL。租户从请求头注入，模型不能生成权限条件或原始 SQL。`/talent-search/candidates` 返回 `employee_no` 作为后续 Milvus 检索的 `candidate_ids`。`execute_composite_search()` 在候选集为空时直接结束，不调用 Milvus，避免空列表退化为全库搜索；多个语义要求按 `requirement_id` 分别保存证据。`search_with_optimization()` 在首轮无有效命中时选择 Rewrite、Multi Query 或 Decompose，生成最多 3 条受约束查询，再次检索并按 `chunk_id` 去重合并
+查询计划把结构化硬条件、语义条件、偏好和待澄清条件分开。Pydantic Schema 提供输出结构，`FILTER_FIELD_REGISTRY` 同时维护字段说明、允许操作符和 SQL 构造函数，并生成提示词中的 Filter DSL。租户从请求头注入，模型不能生成权限条件或原始 SQL。`/product-search/candidates` 返回 `employee_no` 作为后续 Milvus 检索的 `candidate_ids`。`execute_composite_search()` 在候选集为空时直接结束，不调用 Milvus，避免空列表退化为全库搜索；多个语义要求按 `requirement_id` 分别保存证据。`search_with_optimization()` 在首轮无有效命中时选择 Rewrite、Multi Query 或 Decompose，生成最多 3 条受约束查询，再次检索并按 `chunk_id` 去重合并
 
 ## 第 9 课可信证据输出
 
-`POST /api/talent-search` 增加可选参数 `include_evidence_pack`。默认值为 `false`，原有调用继续返回 Query Plan、候选集、检索记录和 Chunk 列表。参数设为 `true` 时，接口从 PostgreSQL 重新读取并鉴权检索命中的 Chunk，再按候选人和 `requirement_id` 输出 `Candidate Evidence Pack`
+`POST /api/product-search` 增加可选参数 `include_evidence_pack`。默认值为 `false`，原有调用继续返回 Query Plan、候选集、检索记录和 Chunk 列表。参数设为 `true` 时，接口从 PostgreSQL 重新读取并鉴权检索命中的 Chunk，再按候选人和 `requirement_id` 输出 `Candidate Evidence Pack`
 
 | 路径 | 用途 |
 |---|---|
@@ -234,7 +234,7 @@ cd backend
 uv run --no-sync pytest -q \
   tests/test_query_plan.py \
   tests/test_hybrid_search_service.py \
-  tests/test_talent_search_api.py \
+  tests/test_product_search_api.py \
   tests/test_evidence_pack.py \
   tests/test_evidence_citations.py
 ```
@@ -281,24 +281,24 @@ C005  C005_郭思远_项目复盘  chunk=markdown  index=succeeded
 
 | 路径 | 用途 |
 |---|---|
-| `backend/app/talent_decision_graph.py` | 定义人才决策输入、内部 State、输出、Runtime Context、节点、路由和可运行主图 |
-| `backend/tests/test_talent_decision_graph.py` | 验证正常完成、空候选结束、可信 Context 和并行 Reducer 行为 |
-| `backend/scripts/verify_talent_decision_graph.py` | 输出逐节点 State 增量、空候选结果和 Reducer 前后对照 |
+| `backend/app/product_decision_graph.py` | 定义人才决策输入、内部 State、输出、Runtime Context、节点、路由和可运行主图 |
+| `backend/tests/test_product_decision_graph.py` | 验证正常完成、空候选结束、可信 Context 和并行 Reducer 行为 |
+| `backend/scripts/verify_product_decision_graph.py` | 输出逐节点 State 增量、空候选结果和 Reducer 前后对照 |
 
-`TalentDecisionState` 将消息、人才要求、候选人范围、证据引用、评估结果、报告和运行状态分开保存。租户与权限通过只读 `DecisionContext` 注入，不接受用户消息或模型输出提供的同名值。主图当前使用注入式候选人 Provider 和占位评估结果，后续课程在保持 State Contract 的前提下接入真实工具、任务理解、并行评估和人机协同
+`ProductDecisionState` 将消息、人才要求、候选人范围、证据引用、评估结果、报告和运行状态分开保存。租户与权限通过只读 `DecisionContext` 注入，不接受用户消息或模型输出提供的同名值。主图当前使用注入式候选人 Provider 和占位评估结果，后续课程在保持 State Contract 的前提下接入真实工具、任务理解、并行评估和人机协同
 
 运行本节独立验证：
 
 ```bash
 cd backend
-uv run --no-sync python -m scripts.verify_talent_decision_graph
+uv run --no-sync python -m scripts.verify_product_decision_graph
 ```
 
 运行本节测试：
 
 ```bash
 cd backend
-uv run --no-sync pytest -q tests/test_talent_decision_graph.py
+uv run --no-sync pytest -q tests/test_product_decision_graph.py
 ```
 
 结果输出为 `6 passed in 0.16s`
@@ -307,11 +307,11 @@ uv run --no-sync pytest -q tests/test_talent_decision_graph.py
 
 | 路径 | 用途 |
 |---|---|
-| `backend/app/talent_tools.py` | 四类只读人才工具、Runtime Context、统一返回协议、重试、熔断和审计执行器 |
-| `backend/tests/test_talent_tools.py` | 验证工具 Schema、租户隔离、Evidence Pack 版本、重试、熔断、审计与主图适配 |
-| `backend/scripts/verify_talent_tools.py` | 使用隔离 SQLite 数据输出四类工具与故障链路结果 |
+| `backend/app/product_tools.py` | 四类只读人才工具、Runtime Context、统一返回协议、重试、熔断和审计执行器 |
+| `backend/tests/test_product_tools.py` | 验证工具 Schema、租户隔离、Evidence Pack 版本、重试、熔断、审计与主图适配 |
+| `backend/scripts/verify_product_tools.py` | 使用隔离 SQLite 数据输出四类工具与故障链路结果 |
 | `backend/samples/lesson12/job_descriptions.json` | 第 12 课合成岗位 JD 数据 |
-| `database/migrations/012_talent_tools.sql` | 新增 `job_descriptions` 与 `tool_call_audits` |
+| `database/migrations/012_product_tools.sql` | 新增 `job_descriptions` 与 `tool_call_audits` |
 
 工具清单为 `filter_candidates`、`search_candidate_evidence` 和 `get_candidate_profiles`（选品模式已移除岗位查询工具）。模型可见 Schema 只包含业务参数，租户、权限、身份和 Run 编号通过 `ToolRuntime` 注入。结构化筛选复用第 8 课 Query Plan 与 SQL Builder，证据检索继续返回第 9 课 Candidate Evidence Pack `2.0`
 
@@ -323,7 +323,7 @@ uv run --no-sync pytest -q tests/test_talent_decision_graph.py
 docker compose -p talent-eval-agents-course up -d postgres
 docker compose -p talent-eval-agents-course exec -T postgres \
   psql -U talent -d talent_docs -v ON_ERROR_STOP=1 -f /dev/stdin \
-  < database/migrations/012_talent_tools.sql
+  < database/migrations/012_product_tools.sql
 ```
 
 迁移使用 `CREATE TABLE IF NOT EXISTS` 和 `CREATE INDEX IF NOT EXISTS`，可以重复执行。全新环境由 `database/init.sql` 直接创建最新结构
@@ -332,13 +332,13 @@ docker compose -p talent-eval-agents-course exec -T postgres \
 
 ```bash
 cd backend
-uv run --no-sync python -m scripts.verify_talent_tools
+uv run --no-sync python -m scripts.verify_product_tools
 ```
 
 运行本节与第 11 课主图测试：
 
 ```bash
-uv run --no-sync pytest -q tests/test_talent_tools.py tests/test_talent_decision_graph.py
+uv run --no-sync pytest -q tests/test_product_tools.py tests/test_product_decision_graph.py
 ```
 
 结果输出为 `23 passed in 0.65s`。后端完整回归结果为 `151 passed, 3 warnings in 4.85s`
@@ -348,15 +348,15 @@ uv run --no-sync pytest -q tests/test_talent_tools.py tests/test_talent_decision
 | 路径 | 用途 |
 |---|---|
 | `backend/app/product_mcp_server.py` | 选品 MCP Server：`filter_products`、`search_product_evidence`、`get_product_profiles`、`check_product_compliance` 4 个 Tools，SKU 档案与必需认证规则 2 类 Resources，`product_assessment` Prompt，scope `product:read` |
-| `backend/app/talent_mcp_client.py` | 将 MCPAdapter 发现的 LangChain Tools 放入 LangGraph ToolNode |
+| `backend/app/product_mcp_client.py` | 将 MCPAdapter 发现的 LangChain Tools 放入 LangGraph ToolNode |
 | `backend/samples/lesson13/codestats_mcp_v2.py` | FastMCP v1 示例的 SDK v2 迁移版，包含 Tool、Resource、目录边界与 STDIO 入口 |
 | `backend/tests/test_codestats_mcp_v2.py` | 验证 CodeStats Tool、Resource、`.venv` 排除和目录越界拦截 |
 | `backend/tests/test_product_mcp_server.py` | 验证能力发现、结构化结果、Resource、Prompt、scope、audience 和租户隔离 |
-| `backend/tests/test_talent_mcp_client.py` | 验证 MCP 工具在 LangGraph ToolNode 中的异步执行 |
+| `backend/tests/test_product_mcp_client.py` | 验证 MCP 工具在 LangGraph ToolNode 中的异步执行 |
 | `backend/scripts/verify_product_mcp.py` | 使用隔离 SQLite 数据启动 Streamable HTTP，验证协议、鉴权和 LangGraph 链路 |
 | `backend/scripts/run_product_mcp_http.py` | 长驻启动无鉴权的本机 Streamable HTTP Demo Server，供 Inspector 和其他 Host 联调 |
 
-MCP 适配层直接复用第 12 课的 `TalentToolService` 和 `ToolExecutor`。`talent_tools.py` 新增 `check_product_compliance`（调用 `product_compliance.py` 程序核算）与 `list_certification_rules`，SQL 继续强制使用可信 `tenant_id`
+MCP 适配层直接复用第 12 课的 `ProductToolService` 和 `ToolExecutor`。`product_tools.py` 新增 `check_product_compliance`（调用 `product_compliance.py` 程序核算）与 `list_certification_rules`，SQL 继续强制使用可信 `tenant_id`
 
 Server 能力清单：
 
@@ -365,7 +365,7 @@ Server 能力清单：
 - 固定 Resource：`product://policies/certification-rules`
 - Prompt：`product_assessment`
 
-Streamable HTTP 保护边界使用 MCP `AuthSettings` 与可注入 `TokenVerifier`。OAuth scope `product:read` 决定客户端能否访问 MCP 服务，token claims 中的 `tenant_id` 和 `permission_scopes` 映射为 `TalentToolContext`。工具参数与 `clientInfo` 不参与可信身份判定
+Streamable HTTP 保护边界使用 MCP `AuthSettings` 与可注入 `TokenVerifier`。OAuth scope `product:read` 决定客户端能否访问 MCP 服务，token claims 中的 `tenant_id` 和 `permission_scopes` 映射为 `ProductToolContext`。工具参数与 `clientInfo` 不参与可信身份判定
 
 本节新增直接依赖 `mcp[cli]>=2.2,<3`、`langchain[mcp]>=1.4,<2` 和 `langchain-core>=1.2,<2`。`MCPAdapter` 在当前 LangChain 版本中仍为 Beta API，升级后需运行本节回归测试
 
@@ -420,7 +420,7 @@ uv run --no-sync python scripts/verify_product_mcp.py
 运行本节定向测试：
 
 ```bash
-uv run --no-sync pytest -q tests/test_codestats_mcp_v2.py tests/test_talent_mcp_client.py tests/test_product_mcp_server.py tests/test_talent_tools.py
+uv run --no-sync pytest -q tests/test_codestats_mcp_v2.py tests/test_product_mcp_client.py tests/test_product_mcp_server.py tests/test_product_tools.py
 ```
 
 结果输出为 `38 passed in 2.05s`。后端完整回归结果为 `177 passed, 2 warnings in 6.69s`
@@ -429,9 +429,9 @@ uv run --no-sync pytest -q tests/test_codestats_mcp_v2.py tests/test_talent_mcp_
 
 | 路径 | 用途 |
 |---|---|
-| `backend/app/talent_request_graph.py` | 把自然语言选品需求编译为结构化条件与执行计划，歧义或 0 结果时统一进入要求修订 |
-| `backend/langgraph.json` | 为本地 Agent Server 注册 `talent_request` 图 |
-| `backend/tests/test_talent_request_graph.py` | 验证需求直达执行计划与歧义需求的澄清 |
+| `backend/app/product_request_graph.py` | 把自然语言选品需求编译为结构化条件与执行计划，歧义或 0 结果时统一进入要求修订 |
+| `backend/langgraph.json` | 为本地 Agent Server 注册 `product_request` 图 |
+| `backend/tests/test_product_request_graph.py` | 验证需求直达执行计划与歧义需求的澄清 |
 
 选品模式没有岗位 JD 或选品模板：原人才版的「岗位名称 → 查询岗位 JD → 确认岗位（`confirm_job` interrupt）」分支已删除，相关表 `job_descriptions` 由迁移 `026_drop_job_descriptions.sql` 删除。图结构为 `receive_request → interpret_input → build_plan →（filter_candidates / resolve_requirements）`。
 
@@ -449,20 +449,20 @@ Studio 使用 Graph mode，Assistant Context 设置为 `tenant_id=course-demo` �
 运行本节定向测试：
 
 ```bash
-uv run --no-sync pytest -q tests/test_talent_request_graph.py tests/test_talent_request_hitl.py tests/test_talent_tools.py
+uv run --no-sync pytest -q tests/test_product_request_graph.py tests/test_product_request_hitl.py tests/test_product_tools.py
 ```
 
 ## 第 15 课动态评估维度与 Subagent 分发
 
 | 路径 | 用途 |
 |---|---|
-| `backend/app/talent_evaluation_dispatch.py` | 定义动态评估维度、Requirement Evidence、确定性 Branch Worker、任务矩阵与并行分发图 |
-| `backend/app/talent_evaluation_runtime.py` | 装配模型、混合检索、PostgreSQL 原文回表、Evidence Pack 生成器和 Branch Worker，导出 Agent Server 可加载的编译图 |
-| `backend/scripts/verify_talent_evaluation_dispatch.py` | 直接引用运行时模块已注册的 `graph`，传入示例状态与可信 Runtime Context 验证独立分发子图 |
-| `backend/tests/test_talent_evaluation_dispatch.py` | 覆盖权重校验、候选人 × 维度分发、reducer 聚合、可信上下文、工具边界、任务上限与失败隔离 |
-| `backend/tests/test_talent_evaluation_branch_agent_live.py` | 使用真实 Chat Model 验证事实抽取、连续原文引用、Evidence Pack 与 Branch Worker 的完整传递 |
+| `backend/app/product_evaluation_dispatch.py` | 定义动态评估维度、Requirement Evidence、确定性 Branch Worker、任务矩阵与并行分发图 |
+| `backend/app/product_evaluation_runtime.py` | 装配模型、混合检索、PostgreSQL 原文回表、Evidence Pack 生成器和 Branch Worker，导出 Agent Server 可加载的编译图 |
+| `backend/scripts/verify_product_evaluation_dispatch.py` | 直接引用运行时模块已注册的 `graph`，传入示例状态与可信 Runtime Context 验证独立分发子图 |
+| `backend/tests/test_product_evaluation_dispatch.py` | 覆盖权重校验、候选人 × 维度分发、reducer 聚合、可信上下文、工具边界、任务上限与失败隔离 |
+| `backend/tests/test_product_evaluation_branch_agent_live.py` | 使用真实 Chat Model 验证事实抽取、连续原文引用、Evidence Pack 与 Branch Worker 的完整传递 |
 
-本节接收第 14 课的 `TalentRequest` 与 `QueryPlan`。硬条件决定候选人范围，语义要求和评估偏好用于生成动态评估维度。每个维度包含定义、整数权重、证据要求、0/3/5 分锚点、检索提示和需求来源。维度生成 Prompt 要求一般不超过 4 个维度，同一主题的要求合并为一个维度，并通过多个 `retrieval_hints` 扩展检索。模型输出不包含维度标识，程序按照维度列表顺序生成 `dimension_number=1..N`，避免模型生成重复标识。Pydantic 负责字段结构约束，`validate_dimension_plan` 只检查权重合计是否为 100。
+本节接收第 14 课的 `ProductRequest` 与 `QueryPlan`。硬条件决定候选人范围，语义要求和评估偏好用于生成动态评估维度。每个维度包含定义、整数权重、证据要求、0/3/5 分锚点、检索提示和需求来源。维度生成 Prompt 要求一般不超过 4 个维度，同一主题的要求合并为一个维度，并通过多个 `retrieval_hints` 扩展检索。模型输出不包含维度标识，程序按照维度列表顺序生成 `dimension_number=1..N`，避免模型生成重复标识。Pydantic 负责字段结构约束，`validate_dimension_plan` 只检查权重合计是否为 100。
 
 候选人与评估维度组成笛卡尔积任务矩阵。LangGraph `Send` 将每个任务发送给独立评估分支，`branch_results` 使用 `operator.add` reducer 聚合结果。验证脚本默认允许 6 个分支并发执行，分支内部再并发处理当前维度的全部 `evidence_requirements`。每条要求组合 `retrieval_hints` 后调用 `search_candidate_evidence`，Future 按提交顺序聚合，因而完成顺序不会改变输出顺序。结果保留 Candidate Evidence Pack 2.0 的事实、来源、冲突、缺失信息和引用指针。`get_candidate_profiles` 不再在候选人 × 维度分支中重复调用。
 
@@ -470,20 +470,20 @@ uv run --no-sync pytest -q tests/test_talent_request_graph.py tests/test_talent_
 
 ```bash
 cd backend
-uv run --no-sync python -m scripts.verify_talent_evaluation_dispatch --log-level INFO
+uv run --no-sync python -m scripts.verify_product_evaluation_dispatch --log-level INFO
 ```
 
-运行前需要启动 PostgreSQL、Milvus、MinIO 和 etcd，并配置模型、Embedding 与 Rerank 服务。脚本直接查询真实候选人和证据索引，不创建固定候选人或固定分支结果。`langgraph.json` 以 `talent_evaluation_dispatch` 注册该独立子图，完整主流程接入留到后续课程。
+运行前需要启动 PostgreSQL、Milvus、MinIO 和 etcd，并配置模型、Embedding 与 Rerank 服务。脚本直接查询真实候选人和证据索引，不创建固定候选人或固定分支结果。`langgraph.json` 以 `product_evaluation_dispatch` 注册该独立子图，完整主流程接入留到后续课程。
 
 运行本节与前置课程的定向测试：
 
 ```bash
 uv run --no-sync pytest -q \
   tests/test_evidence_pack.py \
-  tests/test_talent_evaluation_dispatch.py \
-  tests/test_talent_tools.py \
-  tests/test_talent_decision_graph.py \
-  tests/test_talent_request_graph.py
+  tests/test_product_evaluation_dispatch.py \
+  tests/test_product_tools.py \
+  tests/test_product_decision_graph.py \
+  tests/test_product_request_graph.py
 ```
 
 Chat Model 保持同步 `invoke` 调用方式，全链路仅使用 `CHAT_MODEL`。凡是包含外部 LLM 调用的工具和复合链路，都不在项目的 `ToolExecutor` 中设置额外超时。
@@ -502,7 +502,7 @@ DashScope 的 OpenAI 兼容端点对 `json_schema` 约束编译可能返回 `gra
 
 ```bash
 RUN_LIVE_MODEL_TESTS=1 uv run --no-sync pytest \
-  tests/test_talent_evaluation_branch_agent_live.py -q -s
+  tests/test_product_evaluation_branch_agent_live.py -q -s
 ```
 
 该测试会把用例中的测试证据发送到项目配置的外部模型端点，应在已获得数据发送授权的环境中执行。不设置 `RUN_LIVE_MODEL_TESTS=1` 时默认跳过，避免普通回归依赖外部模型网络。
@@ -511,11 +511,11 @@ RUN_LIVE_MODEL_TESTS=1 uv run --no-sync pytest \
 
 | 路径 | 用途 |
 |---|---|
-| `backend/app/talent_evaluation_report.py` | 定义并发单维度评分、候选人级并发一致性检查、候选人聚合、稳定排序、短引用映射、报告校验与 Markdown 渲染图 |
-| `backend/app/talent_evaluation_runtime.py` | 使用项目 Chat Model 装配第 16 课评分、一致性检查和报告模型，导出正式 `report_graph` |
-| `backend/langgraph.json` | 以 `talent_evaluation_report` 注册第 16 课正式图 |
-| `backend/scripts/verify_talent_evaluation_report.py` | 读取第 15 课真实分发结果，复用 `report_graph` 输出节点日志、排名、证据状态和 Markdown 报告 |
-| `backend/tests/test_talent_evaluation_report.py` | 覆盖缺失不计 0 分、引用白名单、短引用恢复、并发上限与稳定顺序、一致性风险、得分聚合、运行时装配、图注册与报告渲染 |
+| `backend/app/product_evaluation_report.py` | 定义并发单维度评分、候选人级并发一致性检查、候选人聚合、稳定排序、短引用映射、报告校验与 Markdown 渲染图 |
+| `backend/app/product_evaluation_runtime.py` | 使用项目 Chat Model 装配第 16 课评分、一致性检查和报告模型，导出正式 `report_graph` |
+| `backend/langgraph.json` | 以 `product_evaluation_report` 注册第 16 课正式图 |
+| `backend/scripts/verify_product_evaluation_report.py` | 读取第 15 课真实分发结果，复用 `report_graph` 输出节点日志、排名、证据状态和 Markdown 报告 |
+| `backend/tests/test_product_evaluation_report.py` | 覆盖缺失不计 0 分、引用白名单、短引用恢复、并发上限与稳定顺序、一致性风险、得分聚合、运行时装配、图注册与报告渲染 |
 
 第 16 课接收第 15 课的评估维度和 `branch_results`，程序从 Requirement Evidence 的事实来源生成内部 `evidence_items`。单维度模型评分输出 `sufficient`、`partial`、`missing` 或 `conflicting`，分支执行失败由程序转为 `failed`。`missing`、`conflicting` 和 `failed` 的分数保持为 `null`，不将材料缺失折算为 0 分
 
@@ -525,25 +525,25 @@ RUN_LIVE_MODEL_TESTS=1 uv run --no-sync pytest \
 
 程序为每条证据分配稳定的 `E1`、`E2` 短编号，模型只读写短编号，State 同时保留短编号与完整 `chunk_id` 的映射。评分、一致性检查和报告模型返回后，程序先将短编号恢复为完整 Chunk ID，再执行引用白名单和候选人归属校验。报告正文显示短编号，链接仍由完整 Chunk ID、原文偏移和可信 `citation_url` 渲染，模型输入不包含链接
 
-`talent_evaluation_runtime.py` 通过项目配置的 Chat Model 装配 `dimension_scorer`、`consistency_reviewer` 和 `report_writer`，并导出 `report_graph`。验证脚本只读取 `backend/samples/lesson16/talent_evaluation_dispatch_result_20260921_205347.json` 中的 `dimensions` 与 `branch_results`，固定维度、固定评分和固定报告均已删除
+`product_evaluation_runtime.py` 通过项目配置的 Chat Model 装配 `dimension_scorer`、`consistency_reviewer` 和 `report_writer`，并导出 `report_graph`。验证脚本只读取 `backend/samples/lesson16/product_evaluation_dispatch_result_20260921_205347.json` 中的 `dimensions` 与 `branch_results`，固定维度、固定评分和固定报告均已删除
 
 运行独立验证：
 
 ```bash
 cd backend
-uv run --no-sync python -m scripts.verify_talent_evaluation_report \
-  --input samples/lesson16/talent_evaluation_dispatch_result_20260921_205347.json
+uv run --no-sync python -m scripts.verify_product_evaluation_report \
+  --input samples/lesson16/product_evaluation_dispatch_result_20260921_205347.json
 ```
 
 运行第 16 课与前置课程定向测试：
 
 ```bash
 uv run --no-sync pytest -q \
-  tests/test_talent_evaluation_report.py \
-  tests/test_talent_evaluation_dispatch.py \
-  tests/test_talent_tools.py \
-  tests/test_talent_decision_graph.py \
-  tests/test_talent_request_graph.py
+  tests/test_product_evaluation_report.py \
+  tests/test_product_evaluation_dispatch.py \
+  tests/test_product_tools.py \
+  tests/test_product_decision_graph.py \
+  tests/test_product_request_graph.py
 ```
 
 结果输出为 `64 passed, 2 warnings in 2.32s`，后端完整回归为 `218 passed, 1 skipped, 2 warnings in 89.75s`
@@ -552,11 +552,11 @@ uv run --no-sync pytest -q \
 
 | 路径 | 用途 |
 |---|---|
-| `backend/app/talent_decision_engine.py` | 定义决策引擎主 State、三张子图的编排和终态路由 |
-| `backend/app/talent_decision_runtime.py` | 装配要求确认、评估分发和报告合成子图，导出 Agent Server 可加载的主图 |
-| `backend/scripts/verify_talent_decision_events.py` | 使用确定性子图逐节点输出 scope、节点名和 State 局部更新，`--pause` 用于课堂单步演示 |
-| `backend/tests/test_talent_decision_engine.py` | 验证候选人 State 传递、终态截断和主图注册 |
-| `backend/langgraph.json` | 以 `talent_decision_engine` 注册整合后的决策引擎 |
+| `backend/app/product_decision_engine.py` | 定义决策引擎主 State、三张子图的编排和终态路由 |
+| `backend/app/product_decision_runtime.py` | 装配要求确认、评估分发和报告合成子图，导出 Agent Server 可加载的主图 |
+| `backend/scripts/verify_product_decision_events.py` | 使用确定性子图逐节点输出 scope、节点名和 State 局部更新，`--pause` 用于课堂单步演示 |
+| `backend/tests/test_product_decision_engine.py` | 验证候选人 State 传递、终态截断和主图注册 |
+| `backend/langgraph.json` | 以 `product_decision_engine` 注册整合后的决策引擎 |
 
 主图按 `request_subgraph -> evaluation_subgraph -> report_subgraph` 顺序编排三张已有业务子图。要求确认子图只有在 `candidates_ready` 状态下才进入评估分发。评估分发产出 `branches_ready` 或 `branches_ready_with_failures` 时继续生成报告，其他终态不进入报告子图
 
@@ -568,7 +568,7 @@ Agent Server 为主图提供 Checkpointer。三张子图保持默认的单次调
 
 ```bash
 cd backend
-uv run --no-sync python -m scripts.verify_talent_decision_events
+uv run --no-sync python -m scripts.verify_product_decision_events
 ```
 
 增加 `--pause` 后，脚本在每个节点输出后等待回车
@@ -578,12 +578,12 @@ uv run --no-sync python -m scripts.verify_talent_decision_events
 ```bash
 cd backend
 uv run --no-sync pytest -q \
-  tests/test_talent_request_graph.py \
-  tests/test_talent_request_hitl.py \
-  tests/test_talent_evaluation_dispatch.py \
-  tests/test_talent_evaluation_report.py \
-  tests/test_talent_decision_engine.py \
-  tests/test_talent_decision_graph.py
+  tests/test_product_request_graph.py \
+  tests/test_product_request_hitl.py \
+  tests/test_product_evaluation_dispatch.py \
+  tests/test_product_evaluation_report.py \
+  tests/test_product_decision_engine.py \
+  tests/test_product_decision_graph.py
 ```
 
 结果输出为 `57 passed, 2 warnings in 1.71s`
@@ -594,12 +594,12 @@ uv run --no-sync pytest -q \
 
 | 路径 | 用途 |
 |---|---|
-| `backend/app/talent_run_stream.py` | 驱动真实决策主图，维护 Run 状态、活动连接事件缓冲、HITL 恢复、取消和引用投影 |
-| `backend/app/talent_event_projection.py` | 将内部图更新投影为稳定的 SSE 业务事件和白名单节点输出 |
-| `backend/app/talent_run_api.py` | 提供 Run 创建、SSE 订阅、HITL 恢复和取消接口 |
-| `backend/scripts/verify_talent_run_live.py` | 实际调用 PostgreSQL、Milvus、Rerank 和模型验收完整链路 |
-| `frontend/src/TalentChatPage.tsx` | 完成输入锁定、进度与耗时展示、节点输出抽屉、HITL、取消、Markdown 报告和引用抽屉交互 |
-| `frontend/src/talentRunState.ts` | 使用幂等事件投影构建 Run 状态，累计步骤耗时并冻结暂停或取消步骤 |
+| `backend/app/product_run_stream.py` | 驱动真实决策主图，维护 Run 状态、活动连接事件缓冲、HITL 恢复、取消和引用投影 |
+| `backend/app/product_event_projection.py` | 将内部图更新投影为稳定的 SSE 业务事件和白名单节点输出 |
+| `backend/app/product_run_api.py` | 提供 Run 创建、SSE 订阅、HITL 恢复和取消接口 |
+| `backend/scripts/verify_product_run_live.py` | 实际调用 PostgreSQL、Milvus、Rerank 和模型验收完整链路 |
+| `frontend/src/ProductChatPage.tsx` | 完成输入锁定、进度与耗时展示、节点输出抽屉、HITL、取消、Markdown 报告和引用抽屉交互 |
+| `frontend/src/productRunState.ts` | 使用幂等事件投影构建 Run 状态，累计步骤耗时并冻结暂停或取消步骤 |
 
 默认 Run 并发上限为 6。Chat Model 保持同步调用，全链路仅使用 `CHAT_MODEL`，代码不额外施加 LLM 工具超时。模型取证在连接错误、限流和短暂失败时执行受控重试。条件解析 Prompt 注入 DSL 字段语义，地名约束映射到 `region`，不误写为 `current_position`。决策图返回 `capacity_exceeded`、`dimension_invalid` 或 `failed` 时，Run 服务发送 `run.failed` 并保留具体错误，前端停止运行中步骤动画并显示失败原因
 
@@ -607,7 +607,7 @@ uv run --no-sync pytest -q \
 
 ```bash
 cd backend
-uv run python -m scripts.verify_talent_run_live
+uv run python -m scripts.verify_product_run_live
 ```
 
 该脚本先用完整自然语言岗位问题触发岗位确认并提交真实 JD，再用带地区、年限、现任岗位和能力要求的自然语言问题完成小候选集评估。两个场景都读取已入库的合成业务材料，候选人筛选、证据检索、模型取证、评分、报告和引用回查都由正式链路执行，不在 API 层构造固定候选人或报告
@@ -616,12 +616,12 @@ uv run python -m scripts.verify_talent_run_live
 
 | 路径 | 用途 |
 |---|---|
-| `database/migrations/020_run_history.sql` | 创建 `talent_runs` 与 `talent_run_steps` 的幂等迁移 |
-| `backend/app/talent_run_history.py` | 将 Run 业务事件合并为 Run 与步骤最新快照 |
-| `backend/tests/test_talent_run_history.py` | 验证快照合并、排序与 HITL 耗时 |
-| `frontend/src/talent-run-history.css` | 运行历史列表样式 |
+| `database/migrations/020_run_history.sql` | 创建 `product_runs` 与 `product_run_steps` 的幂等迁移 |
+| `backend/app/product_run_history.py` | 将 Run 业务事件合并为 Run 与步骤最新快照 |
+| `backend/tests/test_product_run_history.py` | 验证快照合并、排序与 HITL 耗时 |
+| `frontend/src/product-run-history.css` | 运行历史列表样式 |
 
-`TalentRunManager` 在生成 `RunEvent` 后同步调用运行记录 Store。`run.started` 创建 Run，`step.started` `step.progress` `step.completed` 按 `run_id + step_id` 更新同一行，`report.completed` 保存 Markdown 报告、引用和 Trace ID。SSE 仍然只承担当前连接的实时交付
+`ProductRunManager` 在生成 `RunEvent` 后同步调用运行记录 Store。`run.started` 创建 Run，`step.started` `step.progress` `step.completed` 按 `run_id + step_id` 更新同一行，`report.completed` 保存 Markdown 报告、引用和 Trace ID。SSE 仍然只承担当前连接的实时交付
 
 | 接口 | 用途 |
 |---|---|
@@ -634,11 +634,11 @@ uv run python -m scripts.verify_talent_run_live
 
 | 路径 | 用途 |
 |---|---|
-| `backend/app/talent_checkpoint.py` | 管理 `AsyncPostgresSaver` 连接池、`setup()` 与应用生命周期 |
-| `backend/app/talent_request_graph.py` | 使用历史 `messages` 和当前结构化要求完成增删改 |
+| `backend/app/product_checkpoint.py` | 管理 `AsyncPostgresSaver` 连接池、`setup()` 与应用生命周期 |
+| `backend/app/product_request_graph.py` | 使用历史 `messages` 和当前结构化要求完成增删改 |
 | `backend/scripts/verify_postgres_checkpointer.py` | 用最小 Graph 验证两轮恢复与四张 Checkpoint 表 |
 | `database/migrations/021_conversation_history.sql` | 创建会话标题、状态与更新时间投影 |
-| `frontend/src/talent-conversation.css` | 会话状态筛选、多轮消息与修订反馈的页面样式 |
+| `frontend/src/product-conversation.css` | 会话状态筛选、多轮消息与修订反馈的页面样式 |
 
 同一会话复用 `conversation_id` 作为 `thread_id`，`AsyncPostgresSaver` 恢复父图的 `messages` 与当前结构化要求，请求子图合并本轮修订后继续完整执行评估与报告链路
 
@@ -658,13 +658,13 @@ uv run python -m scripts.verify_talent_run_live
 | 路径 | 用途 |
 |---|---|
 | `backend/app/evaluation_case.py` | 定义首期四个评测模块、可重放 Case 协议与 SQL 存储器 |
-| `backend/app/talent_request_graph.py` | 在人才要求理解的真实调用边界自动记录输入与实际输出 |
-| `backend/app/talent_run_stream.py` | 为每个 Run 注入 `run_id`、`conversation_id` 和 `turn_no` |
+| `backend/app/product_request_graph.py` | 在人才要求理解的真实调用边界自动记录输入与实际输出 |
+| `backend/app/product_run_stream.py` | 为每个 Run 注入 `run_id`、`conversation_id` 和 `turn_no` |
 | `database/migrations/022_evaluation_cases.sql` | 创建四个模块共用的 `evaluation_cases` 原始 Case 表 |
 | `backend/scripts/verify_evaluation_case.py` | 调用真实 FastAPI Run 和 SSE，完成后从 PostgreSQL 读回自动采集结果 |
 | `backend/tests/test_evaluation_case_store.py` | 使用开发环境 PostgreSQL 验证持久化与调用序号，测试后删除自身记录 |
 
-完整消息继续保存在 LangGraph Checkpoint 中，人才要求理解模块使用最近四轮消息和上一轮完整 `TalentRequest` 形成独立输入。每次 Graph 调用都自动落库，新 Case 的标注状态为 `unlabeled`
+完整消息继续保存在 LangGraph Checkpoint 中，人才要求理解模块使用最近四轮消息和上一轮完整 `ProductRequest` 形成独立输入。每次 Graph 调用都自动落库，新 Case 的标注状态为 `unlabeled`
 
 执行第 22 课真实链路验证前，需要按开发模式启动后端 API，并完成 `022_evaluation_cases.sql` 迁移。验证脚本会实际调用模型、检索服务和全部人才评估 Graph，直到接收 `run.completed`
 
@@ -863,10 +863,10 @@ backend/logs/worker-error-YYYY-MM-DD.log
 | 路径 | 用途、关键接口 |
 | --- | --- |
 | `backend/app/evaluation_case.py` | `capture_call(call, context, module_key, input_payload, ...)` 返回原业务结果；`extraction_scope` 管理线程内业务身份 |
-| `backend/app/talent_request_graph.py` | 岗位候选及路由采集、要求理解采集失败隔离 |
-| `backend/app/talent_evaluation_dispatch.py` | 维度生成采集、证据要求线程设置身份 |
+| `backend/app/product_request_graph.py` | 岗位候选及路由采集、要求理解采集失败隔离 |
+| `backend/app/product_evaluation_dispatch.py` | 维度生成采集、证据要求线程设置身份 |
 | `backend/app/evidence_pack.py` | 模型输入与原始短标识输出采集，模型重试逐次记录 |
-| `backend/app/talent_tools.py` | `copy_context().run` 将调用方上下文传给工具执行线程 |
+| `backend/app/product_tools.py` | `copy_context().run` 将调用方上下文传给工具执行线程 |
 | `backend/app/models.py` | `EvaluationFeedbackRecord`，反馈外键关联 Run 与可选 Case |
 | `backend/app/evaluation_api.py` | Case 分页筛选、详情和反馈创建接口 |
 | `database/migrations/023_evaluation_feedback.sql` | 幂等新增反馈表与索引、范围组合约束 |

@@ -59,7 +59,7 @@ def make_demo(live_model=False):
         def with_structured_output(self, schema):
             if schema is QueryPlan:
                 return SimpleNamespace(invoke=lambda _: QueryPlan.model_validate({
-                    'task_type': 'find_talent', 'filters': [{'field': 'region', 'operator': 'eq', 'value': '深圳'}],
+                    'task_type': 'find_product', 'filters': [{'field': 'region', 'operator': 'eq', 'value': '深圳'}],
                     'semantic_requirements': [{'requirement_id': 'S1', 'query': REQUIREMENT}]}))
             if schema is EvidenceExtraction and live is not None:
                 structured = live.with_structured_output(schema)
@@ -108,7 +108,7 @@ def main():
             return
         client = TestClient(app)
         headers = {'X-Tenant-ID': 'course-demo', 'X-Permission-Scopes': 'hr_private'}
-        response = client.post('/api/talent-search', headers=headers,
+        response = client.post('/api/product-search', headers=headers,
             json={'query': QUERY, 'include_evidence_pack': True, 'limit': 8})
         response.raise_for_status()
         body = response.json()

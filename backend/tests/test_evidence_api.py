@@ -57,7 +57,7 @@ def test_create_evidence_index_queues_job_for_current_document_version(monkeypat
     assert result["status"] == IndexStatus.PENDING
     assert fake_db.commits == 1
     assert fake_db.added
-    assert fake_redis.items == [("talent:index:queue", f"{result['id']}:{version_id}")]
+    assert fake_redis.items == [("product:index:queue", f"{result['id']}:{version_id}")]
 
 
 def test_search_evidence_builds_filter_from_headers_and_payload(monkeypatch):

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { MarkdownReport } from "./TalentChatPage";
+import { MarkdownReport } from "./ProductChatPage";
 
 describe("MarkdownReport", () => {
   it("renders GFM structure and keeps evidence references interactive", () => {

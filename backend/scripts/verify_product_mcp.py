@@ -31,12 +31,12 @@ from app.models import (  # noqa: E402
     ProductAttributes,
     ProductCertification,
 )
-from app.talent_mcp_client import build_mcp_tool_graph  # noqa: E402
+from app.product_mcp_client import build_mcp_tool_graph  # noqa: E402
 from app.product_mcp_server import (  # noqa: E402
     authenticated_product_context,
     build_product_mcp_server,
 )
-from app.talent_tools import TalentToolContext, TalentToolService, ToolExecutor  # noqa: E402
+from app.product_tools import ProductToolContext, ProductToolService, ToolExecutor  # noqa: E402
 
 
 class DemoTokenVerifier:
@@ -86,18 +86,18 @@ def seed_demo_products(engine) -> None:
         db.commit()
 
 
-def build_demo_service(database_path: Path) -> TalentToolService:
+def build_demo_service(database_path: Path) -> ProductToolService:
     engine = create_engine(f"sqlite:///{database_path}")
     seed_demo_products(engine)
 
     def session_factory() -> Session:
         return Session(engine)
 
-    return TalentToolService(session_factory=session_factory)
+    return ProductToolService(session_factory=session_factory)
 
 
-def demo_context() -> TalentToolContext:
-    return TalentToolContext(
+def demo_context() -> ProductToolContext:
+    return ProductToolContext(
         tenant_id="tenant-a",
         permission_scopes=("hr_private",),
         actor_id="lesson-13",
@@ -135,7 +135,7 @@ async def verify_protocol(server) -> dict[str, object]:
         }
 
 
-async def verify_auth(service: TalentToolService) -> dict[str, int]:
+async def verify_auth(service: ProductToolService) -> dict[str, int]:
     resource = "http://127.0.0.1:18081/mcp"
     common_claims = {"tenant_id": "tenant-a", "permission_scopes": ["hr_private"]}
     verifier = DemoTokenVerifier(

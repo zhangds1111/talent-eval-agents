@@ -21,14 +21,14 @@ def test_feedback_roundtrip_preserves_cases_and_does_not_fan_out(monkeypatch):
     from sqlalchemy.orm import sessionmaker
     from sqlalchemy.pool import StaticPool
     from app import evaluation_api
-    from app.models import Base, TalentRunRecord, EvaluationCaseRecord
+    from app.models import Base, ProductRunRecord, EvaluationCaseRecord
     engine = create_engine('sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     factory = sessionmaker(engine)
     monkeypatch.setattr(evaluation_api, 'SessionLocal', factory)
     now = datetime.now(timezone.utc)
     with factory() as db:
-        db.add(TalentRunRecord(run_id='r', conversation_id='c', turn_no=1, message='test', status='completed', started_at=now, updated_at=now))
+        db.add(ProductRunRecord(run_id='r', conversation_id='c', turn_no=1, message='test', status='completed', started_at=now, updated_at=now))
         case = EvaluationCaseRecord(source_run_id='r', conversation_id='c', turn_no=1, module_key='request_understanding', invocation_no=1, input_payload={'text':'frozen'}, output_payload={'actual':True})
         db.add(case); db.commit(); db.refresh(case); case_id = str(case.id)
     app = FastAPI(); app.include_router(evaluation_api.router); client = TestClient(app)

@@ -1591,7 +1591,7 @@ wheels = [
 ]
 
 [[package]]
-name = "talent-mineru-runtime"
+name = "product-mineru-runtime"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

@@ -8,7 +8,7 @@ from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.graph import START, MessagesState, StateGraph
 
 from app.config import get_settings
-from app.talent_checkpoint import checkpoint_dsn
+from app.product_checkpoint import checkpoint_dsn
 
 
 CHECKPOINT_TABLES = (

@@ -211,7 +211,7 @@ COMMENT ON TABLE chunking_runs IS '一次可复现的文档切片运行及其自
 COMMENT ON TABLE document_chunks IS '带来源定位、父子关系、相邻关系和权限信息的人才证据单元';
 COMMENT ON TABLE evidence_index_jobs IS 'PostgreSQL 与 Milvus 之间的证据索引任务及一致性状态';
 
-CREATE TABLE talent_runs (
+CREATE TABLE product_runs (
     run_id VARCHAR(64) PRIMARY KEY,
     conversation_id VARCHAR(64) NOT NULL,
     turn_no INTEGER NOT NULL CHECK (turn_no > 0),
@@ -226,15 +226,15 @@ CREATE TABLE talent_runs (
     updated_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX idx_talent_runs_status ON talent_runs (status);
-CREATE INDEX idx_talent_runs_started_at ON talent_runs (started_at DESC);
-CREATE INDEX idx_talent_runs_trace_id ON talent_runs (trace_id);
-CREATE INDEX idx_talent_runs_conversation_turn
-ON talent_runs (conversation_id, turn_no);
+CREATE INDEX idx_product_runs_status ON product_runs (status);
+CREATE INDEX idx_product_runs_started_at ON product_runs (started_at DESC);
+CREATE INDEX idx_product_runs_trace_id ON product_runs (trace_id);
+CREATE INDEX idx_product_runs_conversation_turn
+ON product_runs (conversation_id, turn_no);
 
-CREATE TABLE talent_run_steps (
+CREATE TABLE product_run_steps (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    run_id VARCHAR(64) NOT NULL REFERENCES talent_runs(run_id) ON DELETE CASCADE,
+    run_id VARCHAR(64) NOT NULL REFERENCES product_runs(run_id) ON DELETE CASCADE,
     step_id VARCHAR(64) NOT NULL,
     position INTEGER NOT NULL CHECK (position > 0),
     title VARCHAR(255) NOT NULL,
@@ -248,16 +248,16 @@ CREATE TABLE talent_run_steps (
     active_started_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
     duration_ms BIGINT,
-    CONSTRAINT uq_talent_run_step UNIQUE (run_id, step_id)
+    CONSTRAINT uq_product_run_step UNIQUE (run_id, step_id)
 );
 
-CREATE INDEX idx_talent_run_steps_run_position
-ON talent_run_steps (run_id, position);
+CREATE INDEX idx_product_run_steps_run_position
+ON product_run_steps (run_id, position);
 
-COMMENT ON TABLE talent_runs IS '人才评估 Run 的最新状态、报告与引用快照';
-COMMENT ON TABLE talent_run_steps IS 'Run 内各业务步骤的最新可见结果';
+COMMENT ON TABLE product_runs IS '选品评估 Run 的最新状态、报告与引用快照';
+COMMENT ON TABLE product_run_steps IS 'Run 内各业务步骤的最新可见结果';
 
-CREATE TABLE talent_conversations (
+CREATE TABLE product_conversations (
     conversation_id VARCHAR(64) PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     status VARCHAR(32) NOT NULL,
@@ -266,10 +266,10 @@ CREATE TABLE talent_conversations (
     updated_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX idx_talent_conversations_status_updated
-ON talent_conversations (status, updated_at DESC);
+CREATE INDEX idx_product_conversations_status_updated
+ON product_conversations (status, updated_at DESC);
 
-COMMENT ON TABLE talent_conversations IS '前端会话列表的业务投影，不用于恢复 LangGraph State';
+COMMENT ON TABLE product_conversations IS '前端会话列表的业务投影，不用于恢复 LangGraph State';
 
 CREATE TABLE evaluation_cases (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -304,7 +304,7 @@ COMMENT ON TABLE evaluation_cases IS '从真实 Graph 模块调用边界自动�
 
 CREATE TABLE IF NOT EXISTS evaluation_feedback (
     id UUID PRIMARY KEY,
-    source_run_id VARCHAR(64) NOT NULL REFERENCES talent_runs(run_id),
+    source_run_id VARCHAR(64) NOT NULL REFERENCES product_runs(run_id),
     case_id UUID REFERENCES evaluation_cases(id),
     feedback_scope VARCHAR(16) NOT NULL,
     note TEXT NOT NULL DEFAULT '',

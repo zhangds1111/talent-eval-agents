@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select, exists, func
 from app.database import SessionLocal
 from app.evaluation_case import EvaluationModule
-from app.models import EvaluationCaseRecord as Case, EvaluationFeedbackRecord as Feedback, TalentRunRecord, TalentConversationRecord
+from app.models import EvaluationCaseRecord as Case, EvaluationFeedbackRecord as Feedback, ProductRunRecord, ProductConversationRecord
 
 router = APIRouter(prefix='/api/evaluation', tags=['evaluation'])
 
@@ -41,7 +41,7 @@ def feedback_json(row):
 @router.post('/feedback', status_code=201)
 def create_feedback(payload: FeedbackInput):
     with SessionLocal() as db:
-        if db.get(TalentRunRecord, payload.source_run_id) is None:
+        if db.get(ProductRunRecord, payload.source_run_id) is None:
             raise HTTPException(404, 'Run 不存在')
         if payload.case_id:
             case = db.get(Case, payload.case_id)
@@ -87,10 +87,10 @@ def list_cases(group_by: Literal['run'] | None = None, source_run_id: str | None
             matched = stmt.with_only_columns(Case.source_run_id, maintain_column_froms=True).subquery()
             counts = select(matched.c.source_run_id, func.count().label('case_count')).group_by(matched.c.source_run_id).subquery()
             groups = select(counts.c.source_run_id, counts.c.case_count,
-                TalentRunRecord.completed_at, TalentConversationRecord.title.label('conversation_title')
-            ).outerjoin(TalentRunRecord, TalentRunRecord.run_id == counts.c.source_run_id
-            ).outerjoin(TalentConversationRecord, TalentConversationRecord.conversation_id == TalentRunRecord.conversation_id
-            ).order_by(TalentRunRecord.completed_at.desc().nulls_last(), counts.c.source_run_id
+                ProductRunRecord.completed_at, ProductConversationRecord.title.label('conversation_title')
+            ).outerjoin(ProductRunRecord, ProductRunRecord.run_id == counts.c.source_run_id
+            ).outerjoin(ProductConversationRecord, ProductConversationRecord.conversation_id == ProductRunRecord.conversation_id
+            ).order_by(ProductRunRecord.completed_at.desc().nulls_last(), counts.c.source_run_id
             ).offset(offset).limit(limit + 1)
             rows = db.execute(groups).mappings().all()
             return {'has_more': len(rows) > limit, 'items': [dict(row) for row in rows[:limit]]}

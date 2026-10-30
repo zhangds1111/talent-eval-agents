@@ -22,7 +22,7 @@ from app.product_mcp_server import (
     build_product_mcp_server,
     product_context_from_token,
 )
-from app.talent_tools import TalentToolContext, TalentToolService, ToolExecutor
+from app.product_tools import ProductToolContext, ProductToolService, ToolExecutor
 from scripts.verify_product_mcp import build_demo_service, seed_demo_products, verify_auth
 
 
@@ -36,8 +36,8 @@ def _session_factory(tmp_path):
     return factory
 
 
-def _context() -> TalentToolContext:
-    return TalentToolContext(
+def _context() -> ProductToolContext:
+    return ProductToolContext(
         tenant_id="tenant-a",
         permission_scopes=("hr_private",),
         actor_id="mcp-course-client",
@@ -55,7 +55,7 @@ def _server(tmp_path):
             ],
         }
 
-    service = TalentToolService(
+    service = ProductToolService(
         session_factory=_session_factory(tmp_path),
         evidence_provider=evidence_provider,
     )
@@ -173,7 +173,7 @@ def test_access_token_claims_become_trusted_product_context():
 
     context = product_context_from_token(token)
 
-    assert context == TalentToolContext(
+    assert context == ProductToolContext(
         tenant_id="tenant-a",
         permission_scopes=("hr_private",),
         actor_id="teacher-demo",
@@ -235,7 +235,7 @@ def _protected_server(tmp_path):
             claims={"tenant_id": "tenant-a", "permission_scopes": ["hr_private"]},
         ),
     }
-    service = TalentToolService(session_factory=_session_factory(tmp_path))
+    service = ProductToolService(session_factory=_session_factory(tmp_path))
     server = build_product_mcp_server(
         service,
         ToolExecutor(),
