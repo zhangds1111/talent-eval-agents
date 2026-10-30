@@ -53,7 +53,7 @@
 ### 链路如何流转
 
 1. 需求理解：模型把自然语言需求编译为 `ProductRequestDraft`（硬条件进 `filters`，认证/口碑类要求进 `semantic_requirements`，偏好进 `evaluation_preferences`），随后 `build_plan` 生成 `QueryPlan`；歧义或冲突会触发澄清 interrupt。
-2. 筛选 SKU：`filter_candidates` 按 `QueryPlan.filters` 在候选商品表中精确过滤；0 结果时通过 leave-one-out 诊断定位卡死条件并 interrupt 让用户放宽。
+2. 筛选 SKU：`filter_skus` 按 `QueryPlan.filters` 在候选商品表中精确过滤；0 结果时通过 leave-one-out 诊断定位卡死条件并 interrupt 让用户放宽。
 3. 动态维度 → 证据检索与并行评估 → 维度评分（0/3/5 锚点）→ 一致性审查 → 报告合成：各环节提示词均为选品语境，证据抽取关注证书编号、有效期、适用型号，并区分卖家声明与检测报告。
 4. 报告只表述「有证据/缺证据」及证据所示事实，不下合规结论；结论均可回溯到商品原始材料。
 
@@ -169,7 +169,7 @@ docker compose -p talent-eval-agents-course --profile app up -d --build
 | `POST /api/evidence/search` | 按租户、权限范围和业务条件检索人才证据，并返回来源材料与候选人上下文（纯向量） |
 | `POST /api/evidence/hybrid-search` | 稠密 + BM25 双路召回、RRF 融合、Rerank 精排的证据检索 |
 | `POST /api/product-search/plan` | 把自然语言人才需求编译为受控 Query Plan |
-| `POST /api/product-search/candidates` | 校验 Query Plan，并用确定性 SQL Builder 返回候选人编号集合 |
+| `POST /api/product-search/skus` | 校验 Query Plan，并用确定性 SQL Builder 返回候选人编号集合 |
 | `POST /api/product-search` | 输入自然语言查询，依次执行 Query Plan、SQL 候选筛选、混合检索和可选查询优化，返回 Chunk 列表 |
 | `POST /api/index-jobs/{id}/retry` | 为失败的 Milvus 索引任务创建新的幂等重试任务 |
 | `POST /api/runs` | 创建人才评估 Run |
@@ -185,11 +185,11 @@ docker compose -p talent-eval-agents-course --profile app up -d --build
 | `backend/tests/test_query_plan.py` | DSL 提示词、字段白名单、参数化 SQL、年龄边界、待澄清条件、空候选集和优化策略测试 |
 | `backend/tests/test_product_search_api.py` | 从 HTTP 请求到 Chunk 响应的端到端接口测试，覆盖标准检索与首轮为空后的自动优化检索 |
 
-查询计划把结构化硬条件、语义条件、偏好和待澄清条件分开。Pydantic Schema 提供输出结构，`FILTER_FIELD_REGISTRY` 同时维护字段说明、允许操作符和 SQL 构造函数，并生成提示词中的 Filter DSL。租户从请求头注入，模型不能生成权限条件或原始 SQL。`/product-search/candidates` 返回 `employee_no` 作为后续 Milvus 检索的 `candidate_ids`。`execute_composite_search()` 在候选集为空时直接结束，不调用 Milvus，避免空列表退化为全库搜索；多个语义要求按 `requirement_id` 分别保存证据。`search_with_optimization()` 在首轮无有效命中时选择 Rewrite、Multi Query 或 Decompose，生成最多 3 条受约束查询，再次检索并按 `chunk_id` 去重合并
+查询计划把结构化硬条件、语义条件、偏好和待澄清条件分开。Pydantic Schema 提供输出结构，`FILTER_FIELD_REGISTRY` 同时维护字段说明、允许操作符和 SQL 构造函数，并生成提示词中的 Filter DSL。租户从请求头注入，模型不能生成权限条件或原始 SQL。`/product-search/skus` 返回 `employee_no` 作为后续 Milvus 检索的 `sku_ids`。`execute_composite_search()` 在候选集为空时直接结束，不调用 Milvus，避免空列表退化为全库搜索；多个语义要求按 `requirement_id` 分别保存证据。`search_with_optimization()` 在首轮无有效命中时选择 Rewrite、Multi Query 或 Decompose，生成最多 3 条受约束查询，再次检索并按 `chunk_id` 去重合并
 
 ## 第 9 课可信证据输出
 
-`POST /api/product-search` 增加可选参数 `include_evidence_pack`。默认值为 `false`，原有调用继续返回 Query Plan、候选集、检索记录和 Chunk 列表。参数设为 `true` 时，接口从 PostgreSQL 重新读取并鉴权检索命中的 Chunk，再按候选人和 `requirement_id` 输出 `Candidate Evidence Pack`
+`POST /api/product-search` 增加可选参数 `include_evidence_pack`。默认值为 `false`，原有调用继续返回 Query Plan、候选集、检索记录和 Chunk 列表。参数设为 `true` 时，接口从 PostgreSQL 重新读取并鉴权检索命中的 Chunk，再按候选人和 `requirement_id` 输出 `Sku Evidence Pack`
 
 | 路径 | 用途 |
 |---|---|
@@ -269,7 +269,7 @@ C005  C005_郭思远_项目复盘  chunk=markdown  index=succeeded
 结果说明：
 
 - PostgreSQL 新增 5 份材料，每份 20 个 Parent/Child Chunk，共 100 个 Chunk
-- Milvus `talent_evidence_v2` 写入 50 个可召回 Child Chunk，每名候选人 10 个
+- Milvus `product_evidence_v1` 写入 50 个可召回 Child Chunk，每名候选人 10 个
 - 查询 `筛选在上海且有企业知识库和大模型应用项目经验的候选人` 生成地区过滤和 1 项语义要求
 - 浏览器返回 C001 的 `sufficient` 状态、5 条事实和 16 条原始证据
 - 引用抽屉返回当前版本、标题路径、Markdown 起始位置和 PostgreSQL 原文
@@ -313,7 +313,7 @@ uv run --no-sync pytest -q tests/test_product_decision_graph.py
 | `backend/samples/lesson12/job_descriptions.json` | 第 12 课合成岗位 JD 数据 |
 | `database/migrations/012_product_tools.sql` | 新增 `job_descriptions` 与 `tool_call_audits` |
 
-工具清单为 `filter_candidates`、`search_candidate_evidence` 和 `get_candidate_profiles`（选品模式已移除岗位查询工具）。模型可见 Schema 只包含业务参数，租户、权限、身份和 Run 编号通过 `ToolRuntime` 注入。结构化筛选复用第 8 课 Query Plan 与 SQL Builder，证据检索继续返回第 9 课 Candidate Evidence Pack `2.0`
+工具清单为 `filter_skus`、`search_sku_evidence` 和 `get_sku_profiles`（选品模式已移除岗位查询工具）。模型可见 Schema 只包含业务参数，租户、权限、身份和 Run 编号通过 `ToolRuntime` 注入。结构化筛选复用第 8 课 Query Plan 与 SQL Builder，证据检索继续返回第 9 课 Sku Evidence Pack `2.0`
 
 `ToolExecutor` 统一返回 `ok`、`data`、`error` 和 `meta`，仅对瞬时依赖错误与超时执行受控重试。`policy` 设置默认超时与重试参数，`tool_policies` 可以按工具名称覆盖。连续失败达到阈值后打开熔断器。`SqlAuditSink` 只保存参数键名与调用摘要，不保存查询原文、候选人信息或证据正文
 
@@ -433,7 +433,7 @@ uv run --no-sync pytest -q tests/test_codestats_mcp_v2.py tests/test_product_mcp
 | `backend/langgraph.json` | 为本地 Agent Server 注册 `product_request` 图 |
 | `backend/tests/test_product_request_graph.py` | 验证需求直达执行计划与歧义需求的澄清 |
 
-选品模式没有岗位 JD 或选品模板：原人才版的「岗位名称 → 查询岗位 JD → 确认岗位（`confirm_job` interrupt）」分支已删除，相关表 `job_descriptions` 由迁移 `026_drop_job_descriptions.sql` 删除。图结构为 `receive_request → interpret_input → build_plan →（filter_candidates / resolve_requirements）`。
+选品模式没有岗位 JD 或选品模板：原人才版的「岗位名称 → 查询岗位 JD → 确认岗位（`confirm_job` interrupt）」分支已删除，相关表 `job_descriptions` 由迁移 `026_drop_job_descriptions.sql` 删除。图结构为 `receive_request → interpret_input → build_plan →（filter_skus / resolve_requirements）`。
 
 候选商品筛选启用时，计划无法执行或候选集为空都会进入统一的 `resolve_requirements` 节点，返回 `requirement_revision` 载荷；前端用载荷中的完整 `request_text` 初始化编辑框，用户通过 `revision_text` 提交修改后的完整需求，节点回到 `interpret_input` 重新生成草稿和查询计划，也可以取消。租户与权限由 `DecisionContext` 注入，不进入模型生成的结构化需求或 `QueryPlan`。
 
@@ -464,7 +464,7 @@ uv run --no-sync pytest -q tests/test_product_request_graph.py tests/test_produc
 
 本节接收第 14 课的 `ProductRequest` 与 `QueryPlan`。硬条件决定候选人范围，语义要求和评估偏好用于生成动态评估维度。每个维度包含定义、整数权重、证据要求、0/3/5 分锚点、检索提示和需求来源。维度生成 Prompt 要求一般不超过 4 个维度，同一主题的要求合并为一个维度，并通过多个 `retrieval_hints` 扩展检索。模型输出不包含维度标识，程序按照维度列表顺序生成 `dimension_number=1..N`，避免模型生成重复标识。Pydantic 负责字段结构约束，`validate_dimension_plan` 只检查权重合计是否为 100。
 
-候选人与评估维度组成笛卡尔积任务矩阵。LangGraph `Send` 将每个任务发送给独立评估分支，`branch_results` 使用 `operator.add` reducer 聚合结果。验证脚本默认允许 6 个分支并发执行，分支内部再并发处理当前维度的全部 `evidence_requirements`。每条要求组合 `retrieval_hints` 后调用 `search_candidate_evidence`，Future 按提交顺序聚合，因而完成顺序不会改变输出顺序。结果保留 Candidate Evidence Pack 2.0 的事实、来源、冲突、缺失信息和引用指针。`get_candidate_profiles` 不再在候选人 × 维度分支中重复调用。
+候选人与评估维度组成笛卡尔积任务矩阵。LangGraph `Send` 将每个任务发送给独立评估分支，`branch_results` 使用 `operator.add` reducer 聚合结果。验证脚本默认允许 6 个分支并发执行，分支内部再并发处理当前维度的全部 `evidence_requirements`。每条要求组合 `retrieval_hints` 后调用 `search_sku_evidence`，Future 按提交顺序聚合，因而完成顺序不会改变输出顺序。结果保留 Sku Evidence Pack 2.0 的事实、来源、冲突、缺失信息和引用指针。`get_sku_profiles` 不再在候选人 × 维度分支中重复调用。
 
 运行真实链路验证：
 
@@ -521,7 +521,7 @@ RUN_LIVE_MODEL_TESTS=1 uv run --no-sync pytest \
 
 `score_dimensions` 默认最多并发执行 12 个候选人 × 维度评分任务，并使用保持输入顺序的聚合方式写回 State。`review_consistency` 按候选人隔离输入后默认最多并发检查 12 名候选人。聚合排名依赖一致性结果，报告依赖完整排名，最终校验依赖报告草稿，这三段保持串行以维护数据依赖
 
-候选人聚合由程序按维度权重计算已确认得分、理论上限和可评分覆盖率。排名依次使用已确认得分、可评分覆盖率和 `candidate_id`，模型不参与排名。跨维度一致性问题作为风险保留，降低置信度，但不自动改写已核验分数
+候选人聚合由程序按维度权重计算已确认得分、理论上限和可评分覆盖率。排名依次使用已确认得分、可评分覆盖率和 `sku_id`，模型不参与排名。跨维度一致性问题作为风险保留，降低置信度，但不自动改写已核验分数
 
 程序为每条证据分配稳定的 `E1`、`E2` 短编号，模型只读写短编号，State 同时保留短编号与完整 `chunk_id` 的映射。评分、一致性检查和报告模型返回后，程序先将短编号恢复为完整 Chunk ID，再执行引用白名单和候选人归属校验。报告正文显示短编号，链接仍由完整 Chunk ID、原文偏移和可信 `citation_url` 渲染，模型输入不包含链接
 
@@ -558,9 +558,9 @@ uv run --no-sync pytest -q \
 | `backend/tests/test_product_decision_engine.py` | 验证候选人 State 传递、终态截断和主图注册 |
 | `backend/langgraph.json` | 以 `product_decision_engine` 注册整合后的决策引擎 |
 
-主图按 `request_subgraph -> evaluation_subgraph -> report_subgraph` 顺序编排三张已有业务子图。要求确认子图只有在 `candidates_ready` 状态下才进入评估分发。评估分发产出 `branches_ready` 或 `branches_ready_with_failures` 时继续生成报告，其他终态不进入报告子图
+主图按 `request_subgraph -> evaluation_subgraph -> report_subgraph` 顺序编排三张已有业务子图。要求确认子图只有在 `skus_ready` 状态下才进入评估分发。评估分发产出 `branches_ready` 或 `branches_ready_with_failures` 时继续生成报告，其他终态不进入报告子图
 
-第 17 课已确认的 `candidate_ids` 会直接传入评估分发子图。分发图使用 `candidates_preselected` 区分主图传入与独立调用：主图传入时跳过重复候选人查询，独立运行时仍使用原有 `candidate_provider`
+第 17 课已确认的 `sku_ids` 会直接传入评估分发子图。分发图使用 `skus_preselected` 区分主图传入与独立调用：主图传入时跳过重复候选人查询，独立运行时仍使用原有 `sku_provider`
 
 Agent Server 为主图提供 Checkpointer。三张子图保持默认的单次调用持久化，运行时继承主图 Checkpointer，因此要求确认子图中的 `interrupt()` 可以暂停和恢复，评估子图的内部状态不会跨请求积累
 
@@ -774,7 +774,7 @@ uv run python -m scripts.verify_milvus
 验收脚本输出
 
 ```json
-{"collection": "lesson6_verification_v1", "upserted": 2, "matched": 1, "top_candidate": "C001", "top_score": 1.0, "permission_scope": "hr_private"}
+{"collection": "lesson6_verification_v1", "upserted": 2, "matched": 1, "top_sku": "C001", "top_score": 1.0, "permission_scope": "hr_private"}
 ```
 
 Collection 默认使用 1024 维向量、COSINE 距离和 HNSW 索引
@@ -791,7 +791,7 @@ Collection 默认使用 1024 维向量、COSINE 距离和 HNSW 索引
 
 ## 混合检索与精排
 
-Collection `talent_evidence_v2` 在稠密向量之外增加 BM25 稀疏向量，由 Milvus 原生 Function 在写入时从 `content` 自动生成，`content` 使用 `chinese`（jieba + cnalphanumonly）分析器分词
+Collection `product_evidence_v1` 在稠密向量之外增加 BM25 稀疏向量，由 Milvus 原生 Function 在写入时从 `content` 自动生成，`content` 使用 `chinese`（jieba + cnalphanumonly）分析器分词
 
 | 路径 | 用途 |
 |---|---|
@@ -809,7 +809,7 @@ Collection `talent_evidence_v2` 在稠密向量之外增加 BM25 稀疏向量，
 
 - `RERANK_TOP_N`：精排候选数，默认 20
 
-- `MILVUS_COLLECTION`：证据集合，当前为 `talent_evidence_v2`
+- `MILVUS_COLLECTION`：证据集合，当前为 `product_evidence_v1`
 
 混合检索验收
 
@@ -921,7 +921,7 @@ uv run --no-sync python -m scripts.verify_evaluation_center
 
 配置沿用 `.env` 中用户提供的 `get_judge_model()` 配置：`JUDGE_MODEL`、`JUDGE_API_KEY`、`JUDGE_BASE_URL`，通常使用不同于 `CHAT_MODEL` 的评判模型。缺少 Judge 配置时报错，不回退至 Chat 模型。四个业务模块重放仍调用 `get_chat_model()` 或模块原有确定性实现。修复 Chat 工厂 `model` 未定义的问题，未更改用户的模型选择。
 
-Judge 输入使用 JSON 区分 `task_spec`、`input`、`actual_output` 和可选 `reference_output`。人才要求理解、动态维度生成和事实抽取直接复用各自运行时的原始任务 Prompt，岗位匹配使用对应的确定性路由规则；每次只发送当前模块的任务规范，不发送 `output_schema`。实际输出在模型调用前通过模块 Schema 校验；Golden 候选在调用后校验，候选无效时保留评分并记录 `golden_candidate_invalid`。`verdict` 由程序根据分数生成。
+Judge 输入使用 JSON 区分 `task_spec`、`input`、`actual_output` 和可选 `reference_output`。人才要求理解、动态维度生成和事实抽取直接复用各自运行时的原始任务 Prompt，岗位匹配使用对应的确定性路由规则；每次只发送当前模块的任务规范，不发送 `output_schema`。实际输出在模型调用前通过模块 Schema 校验；Golden 候选在调用后校验，候选无效时保留评分并记录 `golden_sku_invalid`。`verdict` 由程序根据分数生成。
 
 工程根目录迁移：
 

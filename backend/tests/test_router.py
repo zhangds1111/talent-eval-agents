@@ -6,9 +6,9 @@ from app.router import ParserKind, choose_parser
 @pytest.mark.parametrize(
     ("filename", "expected"),
     [
-        ("candidate.csv", ParserKind.LANGCHAIN),
-        ("candidate.json", ParserKind.LANGCHAIN),
-        ("candidate.html", ParserKind.LANGCHAIN),
+        ("sku.csv", ParserKind.LANGCHAIN),
+        ("sku.json", ParserKind.LANGCHAIN),
+        ("sku.html", ParserKind.LANGCHAIN),
         ("interview.docx", ParserKind.LANGCHAIN),
         ("performance.xlsx", ParserKind.NATIVE),
         ("resume.pdf", ParserKind.MINERU),

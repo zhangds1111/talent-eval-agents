@@ -55,7 +55,7 @@ type KB = {
 type Doc = {
   id: string;
   material_no?: string;
-  candidate_id: string;
+  sku_id: string;
   employee_name: string;
   knowledge_base_id?: string;
   title: string;
@@ -147,8 +147,8 @@ type ChunkData = {
 
 type EvidenceHit = {
   chunk_id: string;
-  candidate_id: string;
-  candidate_name: string;
+  sku_id: string;
+  sku_name: string;
   document_id?: string | null;
   document_title?: string | null;
   material_no?: string | null;
@@ -401,7 +401,7 @@ function RecallLab({
   onOpenDocument: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [candidateId, setCandidateId] = useState("");
+  const [skuId, setSkuId] = useState("");
   const [documentType, setDocumentType] = useState("");
   const [permissionScope, setPermissionScope] = useState("hr_private");
   const [limit, setLimit] = useState(5);
@@ -418,7 +418,7 @@ function RecallLab({
     setError("");
     try {
       const payload: Record<string, unknown> = { query, limit, ef: 80 };
-      if (candidateId) payload.candidate_ids = [candidateId];
+      if (skuId) payload.sku_ids = [skuId];
       if (documentType) payload.document_types = [documentType];
       const response = await json(`${API}/evidence/search`, {
         method: "POST",
@@ -457,7 +457,7 @@ function RecallLab({
         </label>
         <label>
           候选商品
-          <select value={candidateId} onChange={(event) => setCandidateId(event.target.value)}>
+          <select value={skuId} onChange={(event) => setSkuId(event.target.value)}>
             <option value="">全部候选商品</option>
             {employees.map((item) => (
               <option value={item.employee_no} key={item.id}>
@@ -505,7 +505,7 @@ function RecallLab({
                 <span className={`status ${statusClass("ready")}`}>Score {item.score.toFixed(4)}</span>
               </header>
               <div className="recallMeta">
-                <span>{item.candidate_name}</span>
+                <span>{item.sku_name}</span>
                 <span>{types[item.document_type || ""] || item.document_type || "-"}</span>
                 <span>{item.document_title || "未关联材料标题"}</span>
                 <span>{item.permission_scope || "-"}</span>
@@ -1240,7 +1240,7 @@ function App() {
               <small>{selected.material_no}</small>
               <h2>{selected.title}</h2>
               <p>
-                {selected.employee?.name || selected.candidate_id} · {types[selected.document_type] || selected.document_type} · v
+                {selected.employee?.name || selected.sku_id} · {types[selected.document_type] || selected.document_type} · v
                 {selected.version?.version_no || 1}
               </p>
               <div className="drawerStatusRow">

@@ -46,9 +46,9 @@ if __name__ == "__main__":
         run_id="verify-tools",
     )
     evidence_pack = {
-        "candidate_ids": ["SKU-DEMO-001"],
+        "sku_ids": ["SKU-DEMO-001"],
         "evidence_packs": [
-            {"schema_version": "2.0", "candidate_id": "SKU-DEMO-001", "requirements": []}
+            {"schema_version": "2.0", "sku_id": "SKU-DEMO-001", "requirements": []}
         ],
     }
     service = ProductToolService(
@@ -60,18 +60,18 @@ if __name__ == "__main__":
     tools = build_product_tools(service, executor)
     print("[tool_names]", [item.name for item in tools])
     print(
-        "[candidate_filter]",
-        service.filter_candidates(
+        "[sku_filter]",
+        service.filter_skus(
             [FilterCondition(field="region", operator="eq", value="美国")], context=context
         ),
     )
     print(
         "[profile]",
-        json.dumps(service.get_candidate_profiles(["SKU-DEMO-001"], context=context), ensure_ascii=False),
+        json.dumps(service.get_sku_profiles(["SKU-DEMO-001"], context=context), ensure_ascii=False),
     )
     print(
         "[evidence_schema]",
-        service.search_candidate_evidence("企业知识库经验", ["SKU-DEMO-001"], context=context)[
+        service.search_sku_evidence("企业知识库经验", ["SKU-DEMO-001"], context=context)[
             "evidence_packs"
         ][0]["schema_version"],
     )
@@ -82,7 +82,7 @@ if __name__ == "__main__":
         attempts["count"] += 1
         if attempts["count"] < 3:
             raise TransientToolError("milvus_unavailable")
-        return {"candidate_ids": ["SKU-DEMO-001"]}
+        return {"sku_ids": ["SKU-DEMO-001"]}
 
     retry_executor = ToolExecutor(
         policy=ToolPolicy(max_attempts=3, backoff_seconds=0), audit_sink=audit
@@ -91,7 +91,7 @@ if __name__ == "__main__":
         "[retry]",
         json.dumps(
             retry_executor.execute(
-                "search_candidate_evidence",
+                "search_sku_evidence",
                 unstable_operation,
                 context=context,
                 arguments={"query": "企业知识库经验"},
@@ -108,7 +108,7 @@ if __name__ == "__main__":
     )
     for _ in range(2):
         breaker_executor.execute(
-            "search_candidate_evidence",
+            "search_sku_evidence",
             lambda: (_ for _ in ()).throw(TransientToolError("milvus_unavailable")),
             context=context,
             arguments={},
@@ -117,7 +117,7 @@ if __name__ == "__main__":
         "[circuit]",
         json.dumps(
             breaker_executor.execute(
-                "search_candidate_evidence",
+                "search_sku_evidence",
                 lambda: {"unexpected": True},
                 context=context,
                 arguments={},

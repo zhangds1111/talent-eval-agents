@@ -7,7 +7,7 @@ export async function evaluationPost(url: string, payload: unknown) {
   return body;
 }
 export function GoldenReview({apiBase, detail, onSaved}: {apiBase:string; detail:any; onSaved:()=>void}) {
-  const [golden, setGolden] = useState(JSON.stringify(detail.dataset_item?.golden_output ?? detail.annotation?.golden_candidate ?? detail.output_payload, null, 2));
+  const [golden, setGolden] = useState(JSON.stringify(detail.dataset_item?.golden_output ?? detail.annotation?.golden_sku ?? detail.output_payload, null, 2));
   const [split, setSplit] = useState('test');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);

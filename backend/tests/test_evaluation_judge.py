@@ -18,7 +18,7 @@ def test_failed_case_does_not_call_judge(monkeypatch):
     from app import evaluation_judge as j
     monkeypatch.setattr(j, 'get_judge_model', lambda **kw: pytest.fail('failed Case must not call model'))
     result = j.judge_case(SimpleNamespace(status='failed', error_code='TimeoutError'))
-    assert result.score == 0 and result.golden_candidate is None
+    assert result.score == 0 and result.golden_sku is None
 
 def test_judge_uses_separate_factory_and_minimal_payload(monkeypatch):
     from app import evaluation_judge as j
@@ -30,12 +30,12 @@ def test_judge_uses_separate_factory_and_minimal_payload(monkeypatch):
             return self
         def invoke(self, messages):
             captured.extend(messages)
-            return {'score': 2, 'error_types': ['omission'], 'reason': '遗漏', 'golden_candidate': GOLDEN, 'confidence': .8}
+            return {'score': 2, 'error_types': ['omission'], 'reason': '遗漏', 'golden_sku': GOLDEN, 'confidence': .8}
     monkeypatch.setattr(j, 'get_judge_model', lambda **kw: Model())
     case = SimpleNamespace(status='succeeded', module_key='request_understanding', input_payload={'messages': []}, output_payload=GOLDEN)
     assert j.judge_case(case).score == 2
     payload = __import__('json').loads(captured[1][1])
-    assert set(payload) == {'module_key', 'task_spec', 'input', 'actual_output', 'generate_golden_candidate'}
+    assert set(payload) == {'module_key', 'task_spec', 'input', 'actual_output', 'generate_golden_sku'}
     assert 'output_schema' not in payload
     assert 'previous_request' in payload['task_spec']
     assert schemas == [j.JudgeResponse]
@@ -58,7 +58,7 @@ def test_judge_redacts_pii_before_external_model_call(monkeypatch):
                 'score': 4,
                 'error_types': [],
                 'reason': '候选人 __PII_PERSON_001__ 的结果完整',
-                'golden_candidate': None,
+                'golden_sku': None,
                 'confidence': 0.9,
             }
 
@@ -101,21 +101,21 @@ def test_invalid_actual_output_is_scored_without_calling_judge(monkeypatch):
     result = j.judge_case(case)
     assert result.score == 0
     assert result.error_types == ['output_schema_invalid']
-    assert result.golden_candidate is None
+    assert result.golden_sku is None
 
 
-def test_invalid_golden_candidate_keeps_the_judge_score(monkeypatch):
+def test_invalid_golden_sku_keeps_the_judge_score(monkeypatch):
     from app import evaluation_judge as j
     class Model:
         def with_structured_output(self, schema, **kw): return self
         def invoke(self, messages):
-            return j.JudgeResult(score=2, verdict='needs_review', error_types=['omission'], reason='存在遗漏', golden_candidate={}, confidence=.8)
+            return j.JudgeResult(score=2, verdict='needs_review', error_types=['omission'], reason='存在遗漏', golden_sku={}, confidence=.8)
     monkeypatch.setattr(j, 'get_judge_model', lambda **kw: Model())
     case = SimpleNamespace(status='succeeded', module_key='request_understanding', input_payload={'messages': []}, output_payload=GOLDEN)
     result = j.judge_case(case)
     assert result.score == 2
-    assert result.golden_candidate is None
-    assert result.error_types == ['omission', 'golden_candidate_invalid']
+    assert result.golden_sku is None
+    assert result.error_types == ['omission', 'golden_sku_invalid']
 
 @pytest.fixture
 def client(monkeypatch):
@@ -149,7 +149,7 @@ def test_batch_isolates_errors_and_filters(client, monkeypatch):
     from app import evaluation_api as api
     from app.evaluation_judge import JudgeResult
     c, cid = client
-    monkeypatch.setattr(api, 'judge_case', lambda case: JudgeResult(score=1, verdict='needs_review', error_types=['omission'], reason='遗漏', golden_candidate=GOLDEN, confidence=.7))
+    monkeypatch.setattr(api, 'judge_case', lambda case: JudgeResult(score=1, verdict='needs_review', error_types=['omission'], reason='遗漏', golden_sku=GOLDEN, confidence=.7))
     result = c.post('/api/evaluation/judge', json={'case_ids':[cid, str(uuid4())]}).json()
     assert [r['status'] for r in result['items']] == ['annotated','error']
     assert len(c.get('/api/evaluation/cases?max_score=2').json()['items']) == 1

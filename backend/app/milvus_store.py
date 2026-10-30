@@ -28,7 +28,7 @@ class MilvusClientProtocol(Protocol):
 @dataclass(frozen=True)
 class EvidenceRecord:
     chunk_id: str
-    candidate_id: str
+    sku_id: str
     document_version_id: str
     tenant_id: str
     document_type: str
@@ -47,7 +47,7 @@ class EvidenceRecord:
 class EvidenceFilter:
     tenant_id: str
     permission_scopes: list[str]
-    candidate_ids: list[str] | None = None
+    sku_ids: list[str] | None = None
     document_types: list[str] | None = None
     document_version_id: str | None = None
 
@@ -55,7 +55,7 @@ class EvidenceFilter:
 @dataclass(frozen=True)
 class EvidenceSearchResult:
     chunk_id: str
-    candidate_id: str
+    sku_id: str
     content: str
     score: float
     metadata: dict[str, Any]
@@ -78,8 +78,8 @@ def build_filter_expression(filters: EvidenceFilter) -> str:
         f"tenant_id == {_literal(filters.tenant_id)}",
         _in_expression("permission_scope", filters.permission_scopes),
     ]
-    if filters.candidate_ids:
-        parts.append(_in_expression("candidate_id", filters.candidate_ids))
+    if filters.sku_ids:
+        parts.append(_in_expression("sku_id", filters.sku_ids))
     if filters.document_types:
         parts.append(_in_expression("document_type", filters.document_types))
     if filters.document_version_id:
@@ -91,7 +91,7 @@ def build_filter_expression(filters: EvidenceFilter) -> str:
 class MilvusEvidenceStore:
     output_fields = [
         "chunk_id",
-        "candidate_id",
+        "sku_id",
         "document_version_id",
         "tenant_id",
         "document_type",
@@ -128,7 +128,7 @@ class MilvusEvidenceStore:
             return
         schema = self.client.create_schema(auto_id=False, enable_dynamic_field=False)
         schema.add_field(field_name="chunk_id", datatype=DataType.VARCHAR, is_primary=True, max_length=36)
-        schema.add_field(field_name="candidate_id", datatype=DataType.VARCHAR, max_length=64)
+        schema.add_field(field_name="sku_id", datatype=DataType.VARCHAR, max_length=64)
         schema.add_field(field_name="document_version_id", datatype=DataType.VARCHAR, max_length=36)
         schema.add_field(field_name="tenant_id", datatype=DataType.VARCHAR, max_length=64)
         schema.add_field(field_name="document_type", datatype=DataType.VARCHAR, max_length=64)
@@ -195,7 +195,7 @@ class MilvusEvidenceStore:
             results.append(
                 EvidenceSearchResult(
                     chunk_id=str(hit.get("id") or entity.get("chunk_id", "")),
-                    candidate_id=str(entity.get("candidate_id", "")),
+                    sku_id=str(entity.get("sku_id", "")),
                     content=str(entity.get("content", "")),
                     score=float(hit.get("distance", 0.0)),
                     metadata=entity,

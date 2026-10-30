@@ -43,8 +43,8 @@ RequestStatus = Literal[
     "request_understood",
     "plan_ready",
     "clarification_required",
-    "candidates_empty",
-    "candidates_ready",
+    "skus_empty",
+    "skus_ready",
     "plan_revised",
     "request_revised",
     "cancelled",
@@ -82,7 +82,7 @@ class ProductRequestOutput(TypedDict):
     input_mode: RequestInputMode
     product_request: dict[str, Any]
     query_plan: dict[str, Any]
-    candidate_ids: list[str]
+    sku_ids: list[str]
     condition_revisions: list[dict[str, Any]]
     plan_version: int
     clarifications: list[dict[str, str]]
@@ -99,7 +99,7 @@ class ProductRequestState(TypedDict, total=False):
     draft: dict[str, Any]
     product_request: dict[str, Any]
     query_plan: dict[str, Any]
-    candidate_ids: list[str]
+    sku_ids: list[str]
     condition_revisions: Annotated[list[dict[str, Any]], add]
     plan_version: int
     clarifications: list[dict[str, str]]
@@ -111,7 +111,7 @@ class ProductRequestState(TypedDict, total=False):
 
 
 RequestInterpreter = Callable[..., ProductRequestUnderstanding | ProductRequestDraft]
-CandidateFilter = Callable[[list[FilterCondition], DecisionContext], list[str]]
+SkuFilter = Callable[[list[FilterCondition], DecisionContext], list[str]]
 CaseRecorder = Callable[[EvaluationCaseDraft], Any]
 
 
@@ -129,7 +129,7 @@ def _receive_request(state: ProductRequestState, runtime: Runtime[DecisionContex
     update: dict[str, Any] = {
         "request_text": request_text,
         "query_plan": {},
-        "candidate_ids": [],
+        "sku_ids": [],
         "condition_revisions": [],
         "plan_version": 0,
         "clarifications": [],
@@ -279,11 +279,11 @@ def _build_plan(state: ProductRequestState) -> dict[str, Any]:
 def _route_after_plan(state: ProductRequestState) -> str:
     if state["status"] == "clarification_required":
         return "resolve_requirements"
-    return "filter_candidates"
+    return "filter_skus"
 
 
-def _route_candidates(state: ProductRequestState) -> str:
-    if state["status"] == "candidates_empty":
+def _route_skus(state: ProductRequestState) -> str:
+    if state["status"] == "skus_empty":
         return "resolve_requirements"
     return END
 
@@ -316,33 +316,33 @@ def _require_interaction(decision: Any, expected_id: str) -> dict[str, Any]:
     return decision
 
 
-def _filter_candidates_node(candidate_filter: CandidateFilter):
-    def filter_candidates(state: ProductRequestState, runtime: Runtime[DecisionContext]) -> dict[str, Any]:
+def _filter_skus_node(sku_filter: SkuFilter):
+    def filter_skus(state: ProductRequestState, runtime: Runtime[DecisionContext]) -> dict[str, Any]:
         plan = QueryPlan.model_validate(state["query_plan"])
-        candidate_ids = candidate_filter(plan.filters, runtime.context)
-        if candidate_ids:
-            return {"candidate_ids": candidate_ids, "status": "candidates_ready"}
-        return {"candidate_ids": [], "status": "candidates_empty"}
+        sku_ids = sku_filter(plan.filters, runtime.context)
+        if sku_ids:
+            return {"sku_ids": sku_ids, "status": "skus_ready"}
+        return {"sku_ids": [], "status": "skus_empty"}
 
-    return filter_candidates
+    return filter_skus
 
 
 def _diagnose_filters(
     filters: list[FilterCondition],
-    candidate_filter: CandidateFilter,
+    sku_filter: SkuFilter,
     context: DecisionContext,
 ) -> list[dict[str, Any]]:
     """leave-one-out 诊断：逐个移除条件，观察候选数变化，定位导致空集的条件"""
     diagnostics = []
     for index, condition in enumerate(filters):
         reduced = filters[:index] + filters[index + 1 :]
-        hit_count = len(candidate_filter(reduced, context))
+        hit_count = len(sku_filter(reduced, context))
         diagnostics.append(
             {
                 "field": str(condition.field),
                 "operator": condition.operator,
                 "value": condition.value,
-                "candidates_without_condition": hit_count,
+                "skus_without_condition": hit_count,
             }
         )
     return diagnostics
@@ -355,7 +355,7 @@ def _resolve_requirements():
     ) -> dict[str, Any]:
         plan_version = state.get("plan_version", 0)
         interaction_id = f"rr-v{plan_version}"
-        reason_code = "plan_blocked" if state["status"] == "clarification_required" else "empty_candidates"
+        reason_code = "plan_blocked" if state["status"] == "clarification_required" else "empty_skus"
         filters = state.get("draft", {}).get("filters", [])
         if reason_code == "plan_blocked":
             blocking_reason = "当前要求存在歧义或冲突，无法生成可执行查询计划"
@@ -406,7 +406,7 @@ def _resolve_requirements():
         return {
             "request_text": revision_text,
             "messages": [HumanMessage(content=revision_text)],
-            "candidate_ids": [],
+            "sku_ids": [],
             "condition_revisions": [revision],
             "plan_version": plan_version + 1,
             "status": "request_revised",
@@ -503,7 +503,7 @@ def _resolve_conditions(state: ProductRequestState) -> dict[str, Any]:
     if "filters" in parsed:
         draft["filters"] = [item.model_dump(mode="json") for item in parsed["filters"]]
         changes.append({"kind": "filters", "count": len(parsed["filters"])})
-        invalidates.add("candidate_set")
+        invalidates.add("sku_set")
     if "semantic_requirements" in parsed:
         draft["semantic_requirements"] = [
             item.model_dump(mode="json") for item in parsed["semantic_requirements"]
@@ -529,20 +529,20 @@ def _resolve_conditions(state: ProductRequestState) -> dict[str, Any]:
     }
 
 
-def _resolve_empty_candidates(candidate_filter: CandidateFilter):
-    def resolve_empty_candidates(
+def _resolve_empty_skus(sku_filter: SkuFilter):
+    def resolve_empty_skus(
         state: ProductRequestState,
         runtime: Runtime[DecisionContext],
     ) -> dict[str, Any]:
         plan = QueryPlan.model_validate(state["query_plan"])
         plan_version = state.get("plan_version", 0)
         interaction_id = f"ec-v{plan_version}"
-        diagnostics = _diagnose_filters(plan.filters, candidate_filter, runtime.context)
+        diagnostics = _diagnose_filters(plan.filters, sku_filter, runtime.context)
         current = [
             FilterCondition.model_validate(item) for item in state["draft"].get("filters", [])
         ]
         payload = {
-            "type": "empty_candidate_set",
+            "type": "empty_sku_set",
             "interaction_id": interaction_id,
             "question": "当前条件未命中任何候选商品，可放宽部分条件后重试，或取消本次任务",
             "filters": diagnostics,
@@ -573,7 +573,7 @@ def _resolve_empty_candidates(candidate_filter: CandidateFilter):
             "action": "relax",
             "changes": parsed["changes"],
             "resolved_clarifications": [],
-            "invalidates": ["candidate_set"],
+            "invalidates": ["sku_set"],
             "plan_version": plan_version + 1,
         }
         return {
@@ -583,13 +583,13 @@ def _resolve_empty_candidates(candidate_filter: CandidateFilter):
             "status": "plan_revised",
         }
 
-    return resolve_empty_candidates
+    return resolve_empty_skus
 
 
 def build_product_request_graph(
     *,
     request_interpreter: RequestInterpreter,
-    candidate_filter: CandidateFilter | None = None,
+    sku_filter: SkuFilter | None = None,
     case_recorder: CaseRecorder | None = None,
     checkpointer: Any | None = None,
 ):
@@ -606,20 +606,20 @@ def build_product_request_graph(
     builder.add_edge("receive_request", "interpret_input")
     builder.add_edge("interpret_input", "build_plan")
 
-    if candidate_filter is None:
+    if sku_filter is None:
         # 第 14 课行为：编译出 QueryPlan 即结束，候选人检索与澄清节点不挂载
         builder.add_edge("build_plan", END)
     else:
-        builder.add_node("filter_candidates", _filter_candidates_node(candidate_filter))
+        builder.add_node("filter_skus", _filter_skus_node(sku_filter))
         builder.add_node("resolve_requirements", _resolve_requirements())
         builder.add_conditional_edges(
             "build_plan",
             _route_after_plan,
-            {"resolve_requirements": "resolve_requirements", "filter_candidates": "filter_candidates"},
+            {"resolve_requirements": "resolve_requirements", "filter_skus": "filter_skus"},
         )
         builder.add_conditional_edges(
-            "filter_candidates",
-            _route_candidates,
+            "filter_skus",
+            _route_skus,
             {"resolve_requirements": "resolve_requirements", END: END},
         )
         builder.add_conditional_edges(
@@ -676,7 +676,7 @@ def model_request_interpreter(
     return ProductRequestUnderstanding.model_validate(result)
 
 
-def database_candidate_filter(filters: list[FilterCondition], context: DecisionContext) -> list[str]:
+def database_sku_filter(filters: list[FilterCondition], context: DecisionContext) -> list[str]:
     service = ProductToolService(session_factory=SessionLocal)
     tool_context = ProductToolContext(
         tenant_id=context.tenant_id,
@@ -684,12 +684,12 @@ def database_candidate_filter(filters: list[FilterCondition], context: DecisionC
         actor_id="langsmith-studio",
         run_id="lesson-17",
     )
-    return service.filter_candidates(filters, context=tool_context)
+    return service.filter_skus(filters, context=tool_context)
 
 
 # Agent Server injects its managed checkpointer when this graph is loaded from langgraph.json.
 graph = build_product_request_graph(
     request_interpreter=model_request_interpreter,
-    candidate_filter=database_candidate_filter,
+    sku_filter=database_sku_filter,
     case_recorder=SqlEvaluationCaseStore(SessionLocal).record,
 )

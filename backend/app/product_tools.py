@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import EmployeeProfile, ToolCallAudit
-from app.query_plan import FilterCondition, QueryPlan, TaskType, select_candidate_ids
+from app.query_plan import FilterCondition, QueryPlan, TaskType, select_sku_ids
 
 logger = logging.getLogger(__name__)
 
@@ -246,44 +246,44 @@ class ProductToolService:
         if not context.permission_scopes:
             raise PermissionError("缺少可用权限范围")
 
-    def filter_candidates(self, filters: list[FilterCondition], *, context: ProductToolContext) -> list[str]:
+    def filter_skus(self, filters: list[FilterCondition], *, context: ProductToolContext) -> list[str]:
         self._check_context(context)
         plan = QueryPlan(task_type=TaskType.FIND_PRODUCT, filters=filters)
         with self.session_factory() as db:
-            return select_candidate_ids(db, plan, tenant_id=context.tenant_id)
+            return select_sku_ids(db, plan, tenant_id=context.tenant_id)
 
-    def get_candidate_profiles(self, candidate_ids: list[str], *, context: ProductToolContext) -> list[dict[str, Any]]:
+    def get_sku_profiles(self, sku_ids: list[str], *, context: ProductToolContext) -> list[dict[str, Any]]:
         self._check_context(context)
-        if not candidate_ids:
+        if not sku_ids:
             return []
         with self.session_factory() as db:
             rows = db.scalars(
                 select(EmployeeProfile).where(
                     EmployeeProfile.tenant_id == context.tenant_id,
-                    EmployeeProfile.employee_no.in_(candidate_ids),
+                    EmployeeProfile.employee_no.in_(sku_ids),
                     EmployeeProfile.employment_status == "active",
                 ).order_by(EmployeeProfile.employee_no)
             ).all()
         return [
-            {"candidate_id": row.employee_no, "name": row.name, "region": row.region,
+            {"sku_id": row.employee_no, "name": row.name, "region": row.region,
              "current_position": row.current_position, "job_level": row.job_level,
              "years_of_experience": row.years_of_experience, "department": row.department}
             for row in rows
         ]
 
-    def check_product_compliance(self, candidate_ids: list[str], *, context: ProductToolContext) -> list[dict[str, Any]]:
+    def check_product_compliance(self, sku_ids: list[str], *, context: ProductToolContext) -> list[dict[str, Any]]:
         """程序计算毛利与必需认证缺口；只返回当前租户内的在售商品。"""
         from app.product_compliance import load_product_facts
 
-        allowed = [item["candidate_id"] for item in self.get_candidate_profiles(candidate_ids, context=context)]
+        allowed = [item["sku_id"] for item in self.get_sku_profiles(sku_ids, context=context)]
         if not allowed:
             return []
         with self.session_factory() as db:
             facts = load_product_facts(db, allowed)
         return [
-            {**facts[candidate_id].model_dump(mode="json"),
-             "certification_gap_count": len(facts[candidate_id].certification_gaps)}
-            for candidate_id in allowed if candidate_id in facts
+            {**facts[sku_id].model_dump(mode="json"),
+             "certification_gap_count": len(facts[sku_id].certification_gaps)}
+            for sku_id in allowed if sku_id in facts
         ]
 
     def list_certification_rules(self, *, context: ProductToolContext) -> list[dict[str, Any]]:
@@ -298,21 +298,21 @@ class ProductToolService:
             for row in rows
         ]
 
-    def search_candidate_evidence(
-        self, query: str, candidate_ids: list[str], *, context: ProductToolContext,
+    def search_sku_evidence(
+        self, query: str, sku_ids: list[str], *, context: ProductToolContext,
     ) -> dict[str, Any]:
         logger.info(
             "event=product_evidence_search_started "
-            "function=ProductToolService.search_candidate_evidence "
-            "run_id=%s candidate_ids=%s query_chars=%s permission_scope_count=%s",
-            context.run_id, candidate_ids, len(query), len(context.permission_scopes),
+            "function=ProductToolService.search_sku_evidence "
+            "run_id=%s sku_ids=%s query_chars=%s permission_scope_count=%s",
+            context.run_id, sku_ids, len(query), len(context.permission_scopes),
         )
         self._check_context(context)
         if self.evidence_provider is None:
             raise TransientToolError("evidence_provider_not_configured")
         result = self.evidence_provider(
             query=query,
-            candidate_ids=candidate_ids,
+            sku_ids=sku_ids,
             tenant_id=context.tenant_id,
             permission_scopes=list(context.permission_scopes),
             include_evidence_pack=True,
@@ -322,9 +322,9 @@ class ProductToolService:
                 raise ValueError("不支持的证据协议版本")
         logger.info(
             "event=product_evidence_search_completed "
-            "function=ProductToolService.search_candidate_evidence "
-            "run_id=%s candidate_ids=%s chunk_count=%s evidence_pack_count=%s",
-            context.run_id, candidate_ids, len(result.get("chunks", [])),
+            "function=ProductToolService.search_sku_evidence "
+            "run_id=%s sku_ids=%s chunk_count=%s evidence_pack_count=%s",
+            context.run_id, sku_ids, len(result.get("chunks", [])),
             len(result.get("evidence_packs", [])),
         )
         return result
@@ -332,45 +332,45 @@ class ProductToolService:
 
 def build_product_tools(service: ProductToolService, executor: ToolExecutor):
     @tool
-    def filter_candidates(
+    def filter_skus(
         filters: Annotated[list[FilterCondition], Field(max_length=20)],
         runtime: ToolRuntime[ProductToolContext],
     ):
         """按目标市场、品类、售价、毛利率等结构化条件筛选授权租户内的在售 SKU。"""
         return executor.execute(
-            "filter_candidates", lambda: service.filter_candidates(filters, context=runtime.context),
+            "filter_skus", lambda: service.filter_skus(filters, context=runtime.context),
             context=runtime.context, arguments={"filters": filters},
         )
 
     @tool
-    def search_candidate_evidence(
+    def search_sku_evidence(
         query: Annotated[str, Field(min_length=1, max_length=500)],
-        candidate_ids: Annotated[list[str], Field(min_length=1, max_length=100)],
+        sku_ids: Annotated[list[str], Field(min_length=1, max_length=100)],
         runtime: ToolRuntime[ProductToolContext],
     ):
         """在给定 SKU 范围内检索商品材料证据并返回 Evidence Pack 2.0。"""
         return executor.execute(
-            "search_candidate_evidence",
-            lambda: service.search_candidate_evidence(query, candidate_ids, context=runtime.context),
-            context=runtime.context, arguments={"query": query, "candidate_ids": candidate_ids},
+            "search_sku_evidence",
+            lambda: service.search_sku_evidence(query, sku_ids, context=runtime.context),
+            context=runtime.context, arguments={"query": query, "sku_ids": sku_ids},
         )
 
     @tool
-    def get_candidate_profiles(
-        candidate_ids: Annotated[list[str], Field(min_length=1, max_length=100)],
+    def get_sku_profiles(
+        sku_ids: Annotated[list[str], Field(min_length=1, max_length=100)],
         runtime: ToolRuntime[ProductToolContext],
     ):
         """批量读取授权租户内 SKU 的结构化基础信息，用于评估取证。"""
         return executor.execute(
-            "get_candidate_profiles",
-            lambda: service.get_candidate_profiles(candidate_ids, context=runtime.context),
-            context=runtime.context, arguments={"candidate_ids": candidate_ids},
+            "get_sku_profiles",
+            lambda: service.get_sku_profiles(sku_ids, context=runtime.context),
+            context=runtime.context, arguments={"sku_ids": sku_ids},
         )
 
-    return [filter_candidates, search_candidate_evidence, get_candidate_profiles]
+    return [filter_skus, search_sku_evidence, get_sku_profiles]
 
 
-def build_candidate_provider(
+def build_sku_provider(
     service: ProductToolService,
     *,
     compile_filters: Callable[[str], list[FilterCondition]],
@@ -382,6 +382,6 @@ def build_candidate_provider(
             permission_scopes=tuple(decision_context.permission_scopes),
             actor_id="langgraph",
         )
-        return service.filter_candidates(compile_filters(request["original_text"]), context=context)
+        return service.filter_skus(compile_filters(request["original_text"]), context=context)
 
     return provider

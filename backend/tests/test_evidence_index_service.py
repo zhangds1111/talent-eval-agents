@@ -9,7 +9,7 @@ def test_build_records_copies_business_identity_and_source_fields():
     document = SimpleNamespace(tenant_id="tenant-a")
     chunk = SimpleNamespace(
         id="22222222-2222-2222-2222-222222222222",
-        candidate_id="C001",
+        sku_id="C001",
         document_version_id="11111111-1111-1111-1111-111111111111",
         document_type="performance_review",
         permission_scope="hr_private",
@@ -47,7 +47,7 @@ def test_index_chunks_embeds_content_and_upserts_records():
     document = SimpleNamespace(tenant_id="tenant-a")
     chunk = SimpleNamespace(
         id="22222222-2222-2222-2222-222222222222",
-        candidate_id="C001",
+        sku_id="C001",
         document_version_id="11111111-1111-1111-1111-111111111111",
         document_type="resume",
         permission_scope="hr_private",
@@ -86,4 +86,4 @@ def test_index_chunks_embeds_content_and_upserts_records():
 
     assert count == 1
     assert store.ensured is True
-    assert store.records[0].candidate_id == "C001"
+    assert store.records[0].sku_id == "C001"

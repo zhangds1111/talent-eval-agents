@@ -156,7 +156,7 @@ def test_parent_keeps_hitl_revision_message_for_following_turn():
     graph = build_product_decision_engine(
         request_graph=build_product_request_graph(
             request_interpreter=interpreter,
-            candidate_filter=lambda filters, c: [] if any(f.value == 5 for f in filters) else ["C001"],
+            sku_filter=lambda filters, c: [] if any(f.value == 5 for f in filters) else ["C001"],
         ),
         evaluation_graph=lambda state: {}, report_graph=lambda state: {},
         checkpointer=InMemorySaver(),

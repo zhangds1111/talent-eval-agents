@@ -15,10 +15,10 @@ from typing_extensions import TypedDict
 DecisionStatus = Literal[
     "received",
     "request_ready",
-    "candidates_ready",
+    "skus_ready",
     "drafting",
     "completed",
-    "no_candidates",
+    "no_skus",
     "failed",
 ]
 
@@ -29,7 +29,7 @@ class ProductRequest(TypedDict):
 
 
 class EvaluationResult(TypedDict):
-    candidate_id: str
+    sku_id: str
     status: Literal["placeholder"]
 
 
@@ -40,7 +40,7 @@ class ProductDecisionInput(TypedDict):
 
 class ProductDecisionOutput(TypedDict):
     status: DecisionStatus
-    candidate_ids: list[str]
+    sku_ids: list[str]
     evaluations: list[EvaluationResult]
     report: str
     errors: list[str]
@@ -50,7 +50,7 @@ class ProductDecisionState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
     request_text: str
     request: ProductRequest
-    candidate_ids: list[str]
+    sku_ids: list[str]
     evidence_refs: Annotated[list[str], list.__add__]
     evaluations: Annotated[list[EvaluationResult], list.__add__]
     report: str
@@ -68,7 +68,7 @@ class DecisionContext:
     turn_no: int = 0
 
 
-CandidateProvider = Callable[[ProductRequest, DecisionContext], list[str]]
+SkuProvider = Callable[[ProductRequest, DecisionContext], list[str]]
 
 
 def _receive_request(
@@ -96,33 +96,33 @@ def _prepare_request(state: ProductDecisionState) -> dict:
     }
 
 
-def _candidate_node(candidate_provider: CandidateProvider):
-    def retrieve_candidates(
+def _sku_node(sku_provider: SkuProvider):
+    def retrieve_skus(
         state: ProductDecisionState,
         runtime: Runtime[DecisionContext],
     ) -> dict:
-        candidate_ids = candidate_provider(state["request"], runtime.context)
-        return {"candidate_ids": candidate_ids, "status": "candidates_ready"}
+        sku_ids = sku_provider(state["request"], runtime.context)
+        return {"sku_ids": sku_ids, "status": "skus_ready"}
 
-    return retrieve_candidates
+    return retrieve_skus
 
 
-def _route_candidates(state: ProductDecisionState) -> Literal["evaluate", "no_candidates"]:
-    return "evaluate" if state.get("candidate_ids") else "no_candidates"
+def _route_skus(state: ProductDecisionState) -> Literal["evaluate", "no_skus"]:
+    return "evaluate" if state.get("sku_ids") else "no_skus"
 
 
 def _evaluate(state: ProductDecisionState) -> dict:
     return {
         "evaluations": [
-            {"candidate_id": candidate_id, "status": "placeholder"}
-            for candidate_id in state["candidate_ids"]
+            {"sku_id": sku_id, "status": "placeholder"}
+            for sku_id in state["sku_ids"]
         ]
     }
 
 
 def _compose_report(state: ProductDecisionState) -> dict:
-    candidate_text = "、".join(item["candidate_id"] for item in state["evaluations"])
-    return {"report": f"候选商品评估占位结果：{candidate_text}", "status": "drafting"}
+    sku_text = "、".join(item["sku_id"] for item in state["evaluations"])
+    return {"report": f"候选商品评估占位结果：{sku_text}", "status": "drafting"}
 
 
 def _validate_report(state: ProductDecisionState) -> dict:
@@ -140,15 +140,15 @@ def _route_report(state: ProductDecisionState) -> Literal["retry", "done"]:
     return "retry"
 
 
-def _no_candidates(_: ProductDecisionState) -> dict:
+def _no_skus(_: ProductDecisionState) -> dict:
     return {
         "evaluations": [],
         "report": "当前条件下未检索到候选商品。",
-        "status": "no_candidates",
+        "status": "no_skus",
     }
 
 
-def build_product_decision_graph(candidate_provider: CandidateProvider):
+def build_product_decision_graph(sku_provider: SkuProvider):
     builder = StateGraph(
         ProductDecisionState,
         context_schema=DecisionContext,
@@ -157,14 +157,14 @@ def build_product_decision_graph(candidate_provider: CandidateProvider):
     )
     builder.add_node("receive_request", _receive_request)
     builder.add_node("prepare_request", _prepare_request)
-    builder.add_node("retrieve_candidates", _candidate_node(candidate_provider))
+    builder.add_node("retrieve_skus", _sku_node(sku_provider))
     builder.add_node("evaluate", _evaluate)
     builder.add_node("compose_report", _compose_report)
     builder.add_node("validate_report", _validate_report)
-    builder.add_node("no_candidates", _no_candidates)
+    builder.add_node("no_skus", _no_skus)
     builder.add_edge(START, "receive_request")
-    builder.add_edge("prepare_request", "retrieve_candidates")
-    builder.add_conditional_edges("retrieve_candidates", _route_candidates)
+    builder.add_edge("prepare_request", "retrieve_skus")
+    builder.add_conditional_edges("retrieve_skus", _route_skus)
     builder.add_edge("evaluate", "compose_report")
     builder.add_edge("compose_report", "validate_report")
     builder.add_conditional_edges(
@@ -172,7 +172,7 @@ def build_product_decision_graph(candidate_provider: CandidateProvider):
         _route_report,
         {"retry": "compose_report", "done": END},
     )
-    builder.add_edge("no_candidates", END)
+    builder.add_edge("no_skus", END)
     return builder.compile()
 
 

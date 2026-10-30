@@ -210,7 +210,7 @@ def create_chunking_run(
                     current_parent = DocumentChunk(
                         chunking_run_id=run.id,
                         document_version_id=version.id,
-                        candidate_id=document.candidate_id,
+                        sku_id=document.sku_id,
                         document_type=document.document_type,
                         permission_scope=document.permission_scope,
                         stable_key=_stable_key(version.id, strategy, f"parent:{'/'.join(path_key)}"),
@@ -232,7 +232,7 @@ def create_chunking_run(
             child = DocumentChunk(
                 chunking_run_id=run.id,
                 document_version_id=version.id,
-                candidate_id=document.candidate_id,
+                sku_id=document.sku_id,
                 document_type=document.document_type,
                 permission_scope=document.permission_scope,
                 stable_key=_stable_key(version.id, strategy, f"{position}:{piece.content}"),

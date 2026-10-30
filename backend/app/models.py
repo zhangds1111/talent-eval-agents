@@ -227,7 +227,7 @@ class Document(Base):
     __tablename__ = "documents"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    candidate_id: Mapped[str] = mapped_column(String(64), index=True)
+    sku_id: Mapped[str] = mapped_column(String(64), index=True)
     material_no: Mapped[str | None] = mapped_column(String(64), unique=True)
     employee_id: Mapped[UUID | None] = mapped_column(ForeignKey("employee_profiles.id"), index=True)
     knowledge_base_id: Mapped[UUID | None] = mapped_column(ForeignKey("knowledge_bases.id"), index=True)
@@ -344,7 +344,7 @@ class DocumentChunk(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     chunking_run_id: Mapped[UUID] = mapped_column(ForeignKey("chunking_runs.id", ondelete="CASCADE"), index=True)
     document_version_id: Mapped[UUID] = mapped_column(ForeignKey("document_versions.id"), index=True)
-    candidate_id: Mapped[str] = mapped_column(String(64), index=True)
+    sku_id: Mapped[str] = mapped_column(String(64), index=True)
     document_type: Mapped[str] = mapped_column(String(64))
     permission_scope: Mapped[str] = mapped_column(String(64))
     stable_key: Mapped[str] = mapped_column(String(64), index=True)
@@ -405,7 +405,7 @@ class EvaluationAnnotationRecord(Base):
     verdict: Mapped[str] = mapped_column(String(32))
     error_types: Mapped[list] = mapped_column(JSON, default=list)
     reason: Mapped[str] = mapped_column(Text)
-    golden_candidate: Mapped[dict | None] = mapped_column(JSON)
+    golden_sku: Mapped[dict | None] = mapped_column(JSON)
     confidence: Mapped[float | None] = mapped_column(Float)
     review_status: Mapped[str] = mapped_column(String(16), default='pending')
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

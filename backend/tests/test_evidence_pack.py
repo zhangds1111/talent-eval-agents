@@ -9,8 +9,8 @@ def module():
     return evidence_pack
 
 
-def source(cid='a', candidate='C001'):
-    return {'chunk_id': cid, 'candidate_id': candidate, 'content': '负责星河项目。',
+def source(cid='a', sku='C001'):
+    return {'chunk_id': cid, 'sku_id': sku, 'content': '负责星河项目。',
             'citation_id': cid, 'document_version_id': 'v1', 'requirement_ids': ['S1']}
 
 
@@ -21,16 +21,16 @@ def extraction():
         'fully_supported': True, 'missing_information': []}
 
 
-def build(data=None, sources=None, candidates=None):
+def build(data=None, sources=None, skus=None):
     return module().build_evidence_packs(
-        candidate_ids=candidates or ['C001'],
+        sku_ids=skus or ['C001'],
         requirements=[{'requirement_id': 'S1', 'query': '负责过星河项目'}],
         sources=sources if sources is not None else [source()],
         extract=lambda requirement, rows: data if data is not None else extraction())
 
 
-def test_duplicate_chunk_is_not_counted_twice_and_missing_candidate_is_preserved():
-    packs = build(sources=[source(), source()], candidates=['C001', 'C002'])
+def test_duplicate_chunk_is_not_counted_twice_and_missing_sku_is_preserved():
+    packs = build(sources=[source(), source()], skus=['C001', 'C002'])
     assert packs[0]['schema_version'] == '2.0'
     assert len(packs[0]['requirements'][0]['citations']) == 1
     assert packs[0]['requirements'][0]['status'] == 'sufficient'
@@ -78,7 +78,7 @@ def test_unverifiable_quote_logs_safe_diagnostic_context(caplog):
     assert 'function=_validate_fact_sources' in message
     assert 'stage=source_validation' in message
     assert 'error_code=quote_not_found' in message
-    assert 'candidate_id=C001' in message
+    assert 'sku_id=C001' in message
     assert 'requirement_id=S1' in message
     assert 'chunk_id=a' in message
     assert 'source_count=1' in message
@@ -135,7 +135,7 @@ def test_noncanonical_period_falls_back_instead_of_entering_conflict_check():
 def test_model_failure_is_not_material_absence():
     def fail(*args):
         raise TimeoutError('private details')
-    packs = module().build_evidence_packs(candidate_ids=['C001'], requirements=[
+    packs = module().build_evidence_packs(sku_ids=['C001'], requirements=[
         {'requirement_id': 'S1', 'query': '负责过星河项目'}], sources=[source()], extract=fail)
     result = packs[0]['requirements'][0]
     assert result['status'] == 'partial'

@@ -170,7 +170,7 @@ def filter_dsl_catalog() -> str:
     )
 
 
-def build_candidate_statement(
+def build_sku_statement(
     plan: QueryPlan, *, tenant_id: str, today: date | None = None
 ) -> Select[tuple[str]]:
     if not tenant_id:
@@ -196,23 +196,23 @@ def build_candidate_statement(
     return statement.where(and_(*clauses)).order_by(EmployeeProfile.employee_no)
 
 
-def select_candidate_ids(db: Session, plan: QueryPlan, *, tenant_id: str, today: date | None = None) -> list[str]:
-    return list(db.scalars(build_candidate_statement(plan, tenant_id=tenant_id, today=today)).all())
+def select_sku_ids(db: Session, plan: QueryPlan, *, tenant_id: str, today: date | None = None) -> list[str]:
+    return list(db.scalars(build_sku_statement(plan, tenant_id=tenant_id, today=today)).all())
 
 
 def execute_composite_search(
     plan: QueryPlan,
     *,
-    candidate_ids: list[str],
+    sku_ids: list[str],
     search_requirement: Any,
 ) -> dict[str, Any]:
-    """Run semantic requirements only inside the SQL-selected candidate set."""
+    """Run semantic requirements only inside the SQL-selected sku set."""
     if not plan.executable:
         raise ValueError("查询计划仍有待澄清条件")
-    if not candidate_ids:
+    if not sku_ids:
         return {
             "task_type": plan.task_type,
-            "candidate_ids": [],
+            "sku_ids": [],
             "evidence_by_requirement": {},
             "preferences": plan.preferences,
         }
@@ -220,13 +220,13 @@ def execute_composite_search(
     evidence = {
         requirement.requirement_id: search_requirement(
             query=requirement.query,
-            candidate_ids=candidate_ids,
+            sku_ids=sku_ids,
         )
         for requirement in plan.semantic_requirements
     }
     return {
         "task_type": plan.task_type,
-        "candidate_ids": candidate_ids,
+        "sku_ids": sku_ids,
         "evidence_by_requirement": evidence,
         "preferences": plan.preferences,
     }

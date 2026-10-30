@@ -8,11 +8,11 @@ from app.model_provider import get_embedding_model
 from app.reranker import get_reranker
 
 
-def _filter(candidate_ids=None):
+def _filter(sku_ids=None):
     return EvidenceFilter(
         tenant_id="course-demo",
         permission_scopes=["hr_private"],
-        candidate_ids=candidate_ids,
+        sku_ids=sku_ids,
     )
 
 
@@ -20,7 +20,7 @@ def _print_hits(title, results):
     print(f"\n== {title} ==")
     for idx, item in enumerate(results, start=1):
         snippet = item.content.replace("\n", " ")[:40]
-        print(f"  {idx:>2}. {item.candidate_id}  score={item.score:.4f}  {snippet}")
+        print(f"  {idx:>2}. {item.sku_id}  score={item.score:.4f}  {snippet}")
 
 
 def run_dense(store, query_vector, query, filters, limit):
@@ -64,7 +64,7 @@ def run_hybrid_rerank(store, embedder, reranker, query, filters, limit):
     print(f"\n== 混合检索 + Rerank 精排  {elapsed*1000:.1f} ms ==")
     for idx, item in enumerate(results, start=1):
         snippet = item.content.replace("\n", " ")[:40]
-        print(f"  {idx:>2}. {item.candidate_id}  rerank={item.rerank_score:.4f}  {snippet}")
+        print(f"  {idx:>2}. {item.sku_id}  rerank={item.rerank_score:.4f}  {snippet}")
     return elapsed, results
 
 

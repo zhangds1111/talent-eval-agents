@@ -55,19 +55,19 @@ def main() -> None:
     current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     dump_json(result, f"output/product_evaluation_report_result_{current_time}.json", ensure_ascii=False, indent=2)
 
-    candidates = [
+    skus = [
         {
-            "candidate_id": item["candidate_id"],
+            "sku_id": item["sku_id"],
             "confirmed_score": item["confirmed_score"],
             "possible_score": item["possible_score"],
             "evidence_coverage_percent": item["evidence_coverage_percent"],
             "confidence": item["confidence"],
         }
-        for item in result["candidate_assessments"]
+        for item in result["sku_assessments"]
     ]
     status_counts: dict[str, int] = {}
-    for candidate in result["candidate_assessments"]:
-        for dimension in candidate["dimensions"]:
+    for sku in result["sku_assessments"]:
+        for dimension in sku["dimensions"]:
             status = dimension["evidence_status"]
             status_counts[status] = status_counts.get(status, 0) + 1
 
@@ -76,7 +76,7 @@ def main() -> None:
         + json.dumps(
             {
                 "order": result["ranking"],
-                "candidates": candidates,
+                "skus": skus,
             },
             ensure_ascii=False,
         )

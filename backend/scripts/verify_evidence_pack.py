@@ -28,12 +28,12 @@ def make_demo(live_model=False):
     engine = create_engine('sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     db = Session(engine)
-    for candidate in ['C901', 'C902']:
-        db.add(EmployeeProfile(employee_no=candidate, name=f'合成候选人{candidate}', region='深圳'))
+    for sku in ['C901', 'C902']:
+        db.add(EmployeeProfile(employee_no=sku, name=f'合成候选人{sku}', region='深圳'))
     chunks = []
     for name in ['review', 'report', 'interview']:
         content = (SAMPLE_DIR / f'{name}.md').read_text()
-        doc = Document(candidate_id='C901', tenant_id='course-demo', title=name, document_type='markdown')
+        doc = Document(sku_id='C901', tenant_id='course-demo', title=name, document_type='markdown')
         file = FileObject(bucket_name='isolated-fixture', object_key=name, original_name=name,
             mime_type='text/markdown', size_bytes=len(content.encode()), sha256='0' * 64)
         db.add_all([doc, file]); db.flush()
@@ -44,7 +44,7 @@ def make_demo(live_model=False):
         run = ChunkingRun(parse_job_id=job.id, strategy='markdown', chunk_size=800)
         db.add(run); db.flush()
         chunk = DocumentChunk(id=uuid5(NAMESPACE_URL, 'lesson09/' + name), chunking_run_id=run.id,
-            document_version_id=version.id, candidate_id='C901', document_type='markdown',
+            document_version_id=version.id, sku_id='C901', document_type='markdown',
             permission_scope='hr_private', stable_key=name, position=0, content=content,
             markdown_start=0, markdown_end=len(content), heading_path=[content.splitlines()[0].lstrip('# ')])
         db.add(chunk); db.flush(); chunks.append(chunk)
@@ -83,7 +83,7 @@ def make_demo(live_model=False):
 
     class DemoStore:
         def hybrid_search(self, *args, **kwargs):
-            return [EvidenceSearchResult(chunk_id=str(c.id), candidate_id=c.candidate_id,
+            return [EvidenceSearchResult(chunk_id=str(c.id), sku_id=c.sku_id,
                 content=c.content, score=0.03, metadata={'document_version_id': str(c.document_version_id)}) for c in chunks]
     app = create_app()
     app.dependency_overrides[get_db] = lambda: db
@@ -116,8 +116,8 @@ def main():
         target = Path('artifacts') / f'lesson09-{mode}.json'
         target.parent.mkdir(exist_ok=True)
         target.write_text(json.dumps(body, ensure_ascii=False, indent=2))
-        summary = {'mode': mode, 'candidate_ids': body['candidate_ids'], 'chunk_count': len(body['chunks']),
-            'requirements': [{'candidate_id': p['candidate_id'], 'status': r['status'],
+        summary = {'mode': mode, 'sku_ids': body['sku_ids'], 'chunk_count': len(body['chunks']),
+            'requirements': [{'sku_id': p['sku_id'], 'status': r['status'],
                 'extraction_status': r['extraction_status'], 'facts': len(r['facts']), 'citations': len(r['citations'])}
                 for p in body['evidence_packs'] for r in p['requirements']]}
         extraction_states = [r['extraction_status'] for p in body['evidence_packs'] for r in p['requirements']

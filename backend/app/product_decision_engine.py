@@ -21,7 +21,7 @@ class ProductDecisionEngineOutput(TypedDict, total=False):
     revision_summary: str
     conversation_title: str
     status: str
-    candidate_ids: list[str]
+    sku_ids: list[str]
     ranking: list[str]
     report: str
     errors: list[str]
@@ -36,7 +36,7 @@ class ProductDecisionEngineState(TypedDict, total=False):
     input_mode: str
     product_request: dict[str, Any]
     query_plan: dict[str, Any]
-    candidate_ids: list[str]
+    sku_ids: list[str]
     condition_revisions: list[dict[str, Any]]
     plan_version: int
     clarifications: list[dict[str, str]]
@@ -49,7 +49,7 @@ class ProductDecisionEngineState(TypedDict, total=False):
     evidence_items: list[dict[str, Any]]
     dimension_assessments: list[dict[str, Any]]
     consistency_issues: list[dict[str, Any]]
-    candidate_assessments: list[dict[str, Any]]
+    sku_assessments: list[dict[str, Any]]
     ranking: list[str]
     report_draft: dict[str, Any]
     report: str
@@ -60,7 +60,7 @@ class ProductDecisionEngineState(TypedDict, total=False):
 def _route_after_request(
     state: ProductDecisionEngineState,
 ) -> Literal["evaluation", "stop"]:
-    return "evaluation" if state.get("status") == "candidates_ready" else "stop"
+    return "evaluation" if state.get("status") == "skus_ready" else "stop"
 
 
 def _route_after_evaluation(
@@ -77,14 +77,14 @@ def _begin_turn(state: ProductDecisionEngineState) -> dict[str, Any]:
     """返回局部更新：未返回的消息、当前输入、要求和标题均保留。"""
 
     update: dict[str, Any] = {
-        "candidate_ids": [],
+        "sku_ids": [],
         "dimensions": [],
         "work_items": [],
         "branch_results": [],
         "evidence_items": [],
         "dimension_assessments": [],
         "consistency_issues": [],
-        "candidate_assessments": [],
+        "sku_assessments": [],
         "ranking": [],
         "report_draft": {},
         "report": "",

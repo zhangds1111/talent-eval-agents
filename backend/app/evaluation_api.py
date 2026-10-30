@@ -99,7 +99,7 @@ def list_cases(group_by: Literal['run'] | None = None, source_run_id: str | None
             case_id=str(row.id), source_run_id=row.source_run_id, conversation_id=row.conversation_id,
             turn_no=row.turn_no, module_key=row.module_key, invocation_no=row.invocation_no,
             status=row.status, error_code=row.error_code, created_at=row.created_at.isoformat(),
-            identity={k: row.input_payload[k] for k in ('candidate_id', 'dimension_number', 'requirement_id', 'attempt') if k in row.input_payload},
+            identity={k: row.input_payload[k] for k in ('sku_id', 'dimension_number', 'requirement_id', 'attempt') if k in row.input_payload},
             has_feedback=signal, run_has_feedback=run_signal_value,
             annotation=row_json(annotation) if annotation else None,
         ) for row, signal, run_signal_value, annotation in rows[:limit]]}
@@ -175,7 +175,7 @@ def confirm_golden(case_id: UUID, payload: ConfirmGolden):
         annotation = db.get(Annotation, case_id)
         if annotation is None:
             annotation = Annotation(case_id=case_id, annotator_type='human', judge_version='human-v1',
-                verdict='unscored', reason='人工编写并确认参考答案', golden_candidate=None)
+                verdict='unscored', reason='人工编写并确认参考答案', golden_sku=None)
             db.add(annotation)
         annotation.review_status = 'confirmed'
         item = DatasetItem(source_case_id=case_id, module_key=case.module_key,
@@ -225,7 +225,7 @@ def batch_replay(payload: ReplayBatch):
             try:
                 result = judge_case(SimpleNamespace(module_key=item.module_key, input_payload=item.input_payload,
                     output_payload=output, status='succeeded'), golden_output=item.golden_output)
-                results.append(dict(dataset_item_id=str(item_id), status='scored', output=output, **result.model_dump(exclude={'golden_candidate'})))
+                results.append(dict(dataset_item_id=str(item_id), status='scored', output=output, **result.model_dump(exclude={'golden_sku'})))
             except Exception as exc:
                 results.append(dict(dataset_item_id=str(item_id), status='judge_error', output=output, error_type=type(exc).__name__))
     scores = [row['score'] for row in results if 'score' in row]

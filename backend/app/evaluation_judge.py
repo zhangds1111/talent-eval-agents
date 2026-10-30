@@ -33,7 +33,7 @@ class JudgeResponse(BaseModel):
     score: int = Field(ge=0, le=4)
     error_types: list[str]
     reason: str = Field(min_length=1)
-    golden_candidate: dict | None = Field(description='完整参考 JSON；无法可靠生成时为 null')
+    golden_sku: dict | None = Field(description='完整参考 JSON；无法可靠生成时为 null')
     confidence: float = Field(ge=0, le=1)
 
 
@@ -45,27 +45,27 @@ JUDGE_PROMPT = '''评价一个模块的实际输出。用户消息是 JSON 评�
 只依据 task_spec、input、actual_output 和可选 reference_output 评分，不使用最终报告或其他模块反推。
 actual_output 已通过代码层 Schema 校验，不需要再次判断 JSON 格式。
 reason 简要指出输入依据、正确字段和主要错误。
-generate_golden_candidate=false 时 golden_candidate 必须为 null。
-generate_golden_candidate=true 时只在能够给出完整参考 JSON 时生成候选，否则返回 null，禁止猜测。
+generate_golden_sku=false 时 golden_sku 必须为 null。
+generate_golden_sku=true 时只在能够给出完整参考 JSON 时生成候选，否则返回 null，禁止猜测。
 提供 reference_output 时以人工确认答案为准比较语义，忽略无意义的措辞差异。
 confidence 表示判断把握，不是被评输出质量，不能替代人工确认。'''
 
 def judge_case(case, *, golden_output=None):
     if case.status == 'failed':
         return JudgeResult(score=0, verdict='failed', error_types=['execution_error'],
-            reason=f'模块调用失败：{case.error_code}', golden_candidate=None, confidence=1)
+            reason=f'模块调用失败：{case.error_code}', golden_sku=None, confidence=1)
     schema = output_schema(case.module_key)
     try:
         actual_output = schema.model_validate(case.output_payload).model_dump(mode='json')
     except ValidationError:
         return JudgeResult(score=0, verdict='failed', error_types=['output_schema_invalid'],
-            reason='实际输出不符合该模块的输出 Schema', golden_candidate=None, confidence=1)
+            reason='实际输出不符合该模块的输出 Schema', golden_sku=None, confidence=1)
     model = get_judge_model(temperature=0)
     if model is None:
         raise RuntimeError('请配置 JUDGE_MODEL、JUDGE_API_KEY、JUDGE_BASE_URL')
     judge_input = dict(module_key=case.module_key, task_spec=TASK_SPECS[case.module_key],
                    input=case.input_payload, actual_output=actual_output,
-                   generate_golden_candidate=golden_output is None)
+                   generate_golden_sku=golden_output is None)
     if golden_output is not None:
         try:
             judge_input['reference_output'] = schema.model_validate(golden_output).model_dump(mode='json')
@@ -80,14 +80,14 @@ def judge_case(case, *, golden_output=None):
     verdict = 'pass' if response.score >= 3 else 'failed' if response.score == 0 else 'needs_review'
     result = JudgeResult(verdict=verdict, **response.model_dump())
     if golden_output is not None:
-        result.golden_candidate = None # 对于回放来说，不需要输出 golden candidate
-    elif result.golden_candidate is not None: # 标注，尝试校验 golden_candidate 是否符合当前模块的输出 Schema
+        result.golden_sku = None # 对于回放来说，不需要输出 golden sku
+    elif result.golden_sku is not None: # 标注，尝试校验 golden_sku 是否符合当前模块的输出 Schema
         try:
-            result.golden_candidate = schema.model_validate(result.golden_candidate).model_dump(mode='json')
+            result.golden_sku = schema.model_validate(result.golden_sku).model_dump(mode='json')
         except ValidationError:
-            result.golden_candidate = None
-            if 'golden_candidate_invalid' not in result.error_types:
-                result.error_types = [*result.error_types, 'golden_candidate_invalid']
+            result.golden_sku = None
+            if 'golden_sku_invalid' not in result.error_types:
+                result.error_types = [*result.error_types, 'golden_sku_invalid']
     return result
 
 def replay_request_understanding(item):

@@ -15,17 +15,17 @@ MAIN_SUFFIXES = {".pdf", ".docx", ".xlsx", ".pptx", ".png", ".wav", ".csv", ".js
 
 
 def main() -> None:
-    candidates = {item["candidate_id"]: item for item in json.loads((ROOT / "sample-data/source/candidates.json").read_text())}
+    skus = {item["sku_id"]: item for item in json.loads((ROOT / "sample-data/source/skus.json").read_text())}
     files = sorted(path for path in DATA.glob("*/*") if path.suffix.lower() in MAIN_SUFFIXES)
     results = []
     with httpx.Client(timeout=900) as client:
         for path in files:
-            candidate_id = re.match(r"(C\d{3})_", path.name).group(1)
-            candidate = candidates[candidate_id]
+            sku_id = re.match(r"(C\d{3})_", path.name).group(1)
+            sku = skus[sku_id]
             response = client.post(
                 f"{API}/documents",
                 files={"file": (path.name, path.read_bytes(), mimetypes.guess_type(path)[0] or "application/octet-stream")},
-                data={"candidate_id": candidate_id, "title": path.stem, "document_type": path.parent.name},
+                data={"sku_id": sku_id, "title": path.stem, "document_type": path.parent.name},
             )
             response.raise_for_status()
             document = response.json()

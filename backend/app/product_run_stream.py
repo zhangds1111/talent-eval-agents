@@ -514,7 +514,7 @@ class ProductRunManager:
             citations.append(
                 {
                     "ref": str(ref),
-                    "candidate": str(item.get("candidate_id", "")),
+                    "sku": str(item.get("sku_id", "")),
                     "document": str(item.get("source_label", "")),
                     "quote": str(item.get("quote", "")),
                     "url": str(item.get("citation_url", "")),

@@ -286,7 +286,7 @@ describe("historyDetailToRunView", () => {
       trace_id: "trace-1",
       steps: [
         {
-          step_id: "filter_candidates",
+          step_id: "filter_skus",
           position: 1,
           title: "筛选候选人",
           kind: "tool",
@@ -294,7 +294,7 @@ describe("historyDetailToRunView", () => {
           completed: 1,
           total: 1,
           summary: "命中 1 名候选人",
-          output: { candidate_count: 1 },
+          output: { sku_count: 1 },
           duration_ms: 42,
         },
       ],
@@ -345,10 +345,10 @@ describe("historyDetailToRunView", () => {
     });
     expect(view.conversationTurns).toHaveLength(2);
     expect(view.steps[0]).toMatchObject({
-      stepId: "filter_candidates",
+      stepId: "filter_skus",
       status: "completed",
       durationMs: 42,
-      output: { candidate_count: 1 },
+      output: { sku_count: 1 },
     });
     expect(view.citations[0].ref).toBe("E1");
     expect(view.conversationTurns[0]).toMatchObject({

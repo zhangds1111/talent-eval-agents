@@ -8,7 +8,7 @@
     "verdict": "pass",
     "error_types": [],
     "reason": "实际输出完整覆盖了用户首轮需求：将“上海地区”正确映射为 region=上海、eq；“至少5年开发经验”正确映射为 years_of_experience>=5；“做过企业知识库 RAG 项目”作为必需语义经历写入 semantic_requirements；“高级 AI 应用工程师”作为岗位查询 job_query，未错误拆为结构化字段。输入包含地区、年限和项目经历，input_mode=detailed_requirement 正确；首轮 revision_action=initial、生成标题且不超长，summary 合理；无歧义所以 clarifications 为空。未见条件遗漏或不当猜测。",
-    "golden_candidate": {
+    "golden_sku": {
       "draft": {
         "input_mode": "detailed_requirement",
         "job_query": "高级 AI 应用工程师",
@@ -55,7 +55,7 @@
       "claim_scope_issue"
     ],
     "reason": "实际输出整体围绕企业知识库/RAG项目和检索增强生成策略抽取，主要事实均可由 sources 连续原文支持，period 格式符合 schema，yes/no 与 fully_supported 基本合理。问题是第1条 claim 写成“负责检索策略与优化措施说明”并非原文直接事实，来源只支持项目描述和实现能力，表述略有概括/任务化；多处重复引用 source_6/source_7、source_1/source_2 等重复 chunk，虽不严重但冗余；遗漏了 ChatBI 企业级项目描述中“企业级 ChatBI/指标 RAG”的总体事实，且第5条未抽取“MD5 复用已有索引、支持增量更新”等优化措施。没有明显捏造，证据引用均为连续原文，因此评为轻微问题。",
-    "golden_candidate": {
+    "golden_sku": {
       "facts": [
         {
           "event": "灵枢智服 - 电商智能客服 Agent",
@@ -160,7 +160,7 @@
       "execution_error"
     ],
     "reason": "模块调用失败：ValidationError",
-    "golden_candidate": null,
+    "golden_sku": null,
     "confidence": 1.0,
     "review_status": "pending",
     "created_at": "2026-10-18 09:33:53.755024+00:00"
@@ -174,7 +174,7 @@
     "verdict": "pass",
     "error_types": [],
     "reason": "输入 job_query 为“高级 AI 应用工程师”。actual_output 中第一条候选名称与查询完全一致，match_type=exact，match_score=1.0；第二条“AI 应用工程师（平台方向）”与查询名称相关但不完全一致，标为 fuzzy 可接受。exact 候选数量恰好为 1，因此按规则 route 应为 select_exact_job，即使存在 fuzzy 候选也应自动采用该 exact；实际 route 正确。候选字段完整且符合 schema。由于未提供完整岗位库快照，只能检查已返回候选的名称相关性、match_type 与 route，无法验证是否遗漏其他岗位或召回完整性，因此 confidence 降低。",
-    "golden_candidate": {
+    "golden_sku": {
       "matches": [
         {
           "job_code": "JD-AI-001",
@@ -208,7 +208,7 @@
     "verdict": "pass",
     "error_types": [],
     "reason": "实际输出符合 schema；仅针对输入中的语义需求 S1（做过企业知识库 RAG 项目）生成评价维度，source_requirement_ids 正确为 S1。权重合计为 100。证据要求包含项目描述、架构/代码、检索优化、成果数据等，具备可验证性。0/3/5 三档锚点齐全且区分清晰，能覆盖无经验、参与经验、主导深度负责并有成果的不同水平。硬条件（上海、5年以上经验）属于筛选条件而非评价维度，未纳入维度是合理的。",
-    "golden_candidate": {
+    "golden_sku": {
       "dimensions": [
         {
           "name": "企业知识库RAG项目实战经验",

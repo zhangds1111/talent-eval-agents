@@ -29,11 +29,11 @@ def main() -> None:
     knowledge_bases = client.get(f"{API}/knowledge-bases", headers=HEADERS).json()
     knowledge_base_id = knowledge_bases[0]["id"] if knowledge_bases else None
     for path in files:
-        candidate_id = re.match(r"(C\d{3})_", path.name).group(1)
+        sku_id = re.match(r"(C\d{3})_", path.name).group(1)
         title = path.stem
-        form = {"candidate_id": candidate_id, "title": title, "document_type": "markdown"}
-        if employees.get(candidate_id):
-            form["employee_id"] = employees[candidate_id]
+        form = {"sku_id": sku_id, "title": title, "document_type": "markdown"}
+        if employees.get(sku_id):
+            form["employee_id"] = employees[sku_id]
         if knowledge_base_id:
             form["knowledge_base_id"] = knowledge_base_id
         upload = client.post(
@@ -75,7 +75,7 @@ def main() -> None:
             print(f"{path.name}: index {final['index_status'] if final else 'timeout'}", file=sys.stderr)
             continue
         print(
-            f"{candidate_id}  {path.stem}  chunk={chunk.json()['strategy']}  index={final['index_status']}",
+            f"{sku_id}  {path.stem}  chunk={chunk.json()['strategy']}  index={final['index_status']}",
             flush=True,
         )
 

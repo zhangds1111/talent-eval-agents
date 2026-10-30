@@ -24,7 +24,7 @@ from app.hybrid_search_service import hybrid_search_evidence as hybrid_search_ev
 from app.milvus_store import EvidenceFilter
 from app.model_provider import get_embedding_model
 from app.model_provider import get_chat_model
-from app.query_plan import QueryPlan, compile_query_plan, merge_query_results, search_with_optimization, select_candidate_ids
+from app.query_plan import QueryPlan, compile_query_plan, merge_query_results, search_with_optimization, select_sku_ids
 from app.reranker import get_reranker
 from app.product_compliance import compute_unit_economics
 from app.models import (
@@ -104,7 +104,7 @@ class ChunkingInput(BaseModel):
 
 class EvidenceSearchInput(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
-    candidate_ids: list[str] | None = None
+    sku_ids: list[str] | None = None
     document_types: list[str] | None = None
     limit: int = Field(default=10, ge=1, le=100)
     ef: int = Field(default=80, ge=10, le=1000)
@@ -112,7 +112,7 @@ class EvidenceSearchInput(BaseModel):
 
 class HybridSearchInput(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
-    candidate_ids: list[str] | None = None
+    sku_ids: list[str] | None = None
     document_types: list[str] | None = None
     limit: int = Field(default=10, ge=1, le=100)
     ef: int = Field(default=80, ge=10, le=1000)
@@ -225,8 +225,8 @@ def evidence_item_json(item, version_by_id, document_by_id, employee_by_id, *, s
     employee = employee_by_id.get(document.employee_id) if document and document.employee_id else None
     return {
         "chunk_id": item.chunk_id,
-        "candidate_id": item.candidate_id,
-        "candidate_name": employee.name if employee else item.candidate_id,
+        "sku_id": item.sku_id,
+        "sku_name": employee.name if employee else item.sku_id,
         "document_id": str(document.id) if document else None,
         "document_title": document.title if document else None,
         "material_no": document.material_no if document else None,
@@ -313,8 +313,8 @@ def list_documents(knowledge_base_id: UUID | None = None, db: Session = Depends(
             {
                 "id": item.id,
                 "material_no": item.material_no,
-                "candidate_id": item.candidate_id,
-                "employee_name": item.employee.name if item.employee else item.candidate_id,
+                "sku_id": item.sku_id,
+                "employee_name": item.employee.name if item.employee else item.sku_id,
                 "knowledge_base_id": item.knowledge_base_id,
                 "title": item.title,
                 "document_type": item.document_type,
@@ -330,7 +330,7 @@ def list_documents(knowledge_base_id: UUID | None = None, db: Session = Depends(
 
 
 @router.post("/documents", status_code=201)
-async def create_document(file: UploadFile = File(...), employee_id: UUID | None = Form(None), knowledge_base_id: UUID | None = Form(None), candidate_id: str = Form(""), title: str = Form(...), document_type: str = Form(...), permission_scope: str = Form("hr_private"), db: Session = Depends(get_db)):
+async def create_document(file: UploadFile = File(...), employee_id: UUID | None = Form(None), knowledge_base_id: UUID | None = Form(None), sku_id: str = Form(""), title: str = Form(...), document_type: str = Form(...), permission_scope: str = Form("hr_private"), db: Session = Depends(get_db)):
     logger.info("document_upload_request filename=%s employee_id=%s knowledge_base_id=%s document_type=%s", file.filename, employee_id, knowledge_base_id, document_type)
     content = await file.read()
     if not content:
@@ -339,7 +339,7 @@ async def create_document(file: UploadFile = File(...), employee_id: UUID | None
         raise HTTPException(404, "员工不存在")
     if knowledge_base_id and not db.get(KnowledgeBase, knowledge_base_id):
         raise HTTPException(404, "知识库不存在")
-    document = upload_document(db, ObjectStore(), filename=file.filename or "upload.bin", content=content, candidate_id=candidate_id, employee_id=employee_id, knowledge_base_id=knowledge_base_id, title=title, document_type=document_type, permission_scope=permission_scope)
+    document = upload_document(db, ObjectStore(), filename=file.filename or "upload.bin", content=content, sku_id=sku_id, employee_id=employee_id, knowledge_base_id=knowledge_base_id, title=title, document_type=document_type, permission_scope=permission_scope)
     version = current_version(db, document.id)
     parse_job = queue_parse_job(
         db,
@@ -350,7 +350,7 @@ async def create_document(file: UploadFile = File(...), employee_id: UUID | None
     return {
         "id": document.id,
         "material_no": document.material_no,
-        "candidate_id": document.candidate_id,
+        "sku_id": document.sku_id,
         "title": document.title,
         "pipeline_status": "parsing",
         "parse_job_id": parse_job.id,
@@ -376,7 +376,7 @@ def get_document(document_id: UUID, db: Session = Depends(get_db)):
             content = store.get_bytes(item.object_key).decode("utf-8", errors="replace")
         artifact_items.append({"id": item.id, "type": item.artifact_type, "content_type": item.content_type, "url": store.presigned_get(item.object_key), "content": content})
     pipeline = build_document_pipeline_payload(db, document.id)
-    return {"id": document.id, "material_no": document.material_no, "candidate_id": document.candidate_id, "employee": {"id": document.employee.id, "employee_no": document.employee.employee_no, "name": document.employee.name} if document.employee else None, "knowledge_base": {"id": document.knowledge_base.id, "name": document.knowledge_base.name} if document.knowledge_base else None, "title": document.title, "document_type": document.document_type, "permission_scope": document.permission_scope, "created_at": document.created_at, "updated_at": document.updated_at, "version": {"id": version.id, "version_no": version.version_no, "created_at": version.created_at} if version else None, "file": {"name": file_object.original_name, "mime_type": file_object.mime_type, "size_bytes": file_object.size_bytes, "bucket_name": file_object.bucket_name, "object_key": file_object.object_key, "preview_url": store.presigned_get(file_object.object_key)} if file_object else None, "jobs": [{"id": job.id, "parser_name": job.parser_name, "parser_version": job.parser_version, "status": job.status, "progress": job.progress, "error_message": job.error_message, "created_at": job.created_at} for job in jobs], "index_jobs": [{"id": job.id, "status": job.status, "embedding_model": job.embedding_model, "collection_name": job.collection_name, "indexed_count": job.indexed_count, "retry_count": job.retry_count, "error_message": job.error_message, "created_at": job.created_at} for job in index_jobs], "pipeline_status": pipeline["pipeline_status"], "parse_status": pipeline["parse_status"], "chunk_status": pipeline["chunk_status"], "index_status": pipeline["index_status"], "artifacts": artifact_items}
+    return {"id": document.id, "material_no": document.material_no, "sku_id": document.sku_id, "employee": {"id": document.employee.id, "employee_no": document.employee.employee_no, "name": document.employee.name} if document.employee else None, "knowledge_base": {"id": document.knowledge_base.id, "name": document.knowledge_base.name} if document.knowledge_base else None, "title": document.title, "document_type": document.document_type, "permission_scope": document.permission_scope, "created_at": document.created_at, "updated_at": document.updated_at, "version": {"id": version.id, "version_no": version.version_no, "created_at": version.created_at} if version else None, "file": {"name": file_object.original_name, "mime_type": file_object.mime_type, "size_bytes": file_object.size_bytes, "bucket_name": file_object.bucket_name, "object_key": file_object.object_key, "preview_url": store.presigned_get(file_object.object_key)} if file_object else None, "jobs": [{"id": job.id, "parser_name": job.parser_name, "parser_version": job.parser_version, "status": job.status, "progress": job.progress, "error_message": job.error_message, "created_at": job.created_at} for job in jobs], "index_jobs": [{"id": job.id, "status": job.status, "embedding_model": job.embedding_model, "collection_name": job.collection_name, "indexed_count": job.indexed_count, "retry_count": job.retry_count, "error_message": job.error_message, "created_at": job.created_at} for job in index_jobs], "pipeline_status": pipeline["pipeline_status"], "parse_status": pipeline["parse_status"], "chunk_status": pipeline["chunk_status"], "index_status": pipeline["index_status"], "artifacts": artifact_items}
 
 
 @router.post("/documents/{document_id}/parse")
@@ -512,7 +512,7 @@ def search_evidence(
             filters=EvidenceFilter(
                 tenant_id=x_tenant_id,
                 permission_scopes=permission_scopes,
-                candidate_ids=payload.candidate_ids,
+                sku_ids=payload.sku_ids,
                 document_types=payload.document_types,
             ),
             limit=payload.limit,
@@ -542,8 +542,8 @@ def search_evidence(
         items.append(
             {
                 "chunk_id": item.chunk_id,
-                "candidate_id": item.candidate_id,
-                "candidate_name": employee.name if employee else item.candidate_id,
+                "sku_id": item.sku_id,
+                "sku_name": employee.name if employee else item.sku_id,
                 "document_id": str(document.id) if document else None,
                 "document_title": document.title if document else None,
                 "material_no": document.material_no if document else None,
@@ -581,7 +581,7 @@ def hybrid_search_evidence(
             filters=EvidenceFilter(
                 tenant_id=x_tenant_id,
                 permission_scopes=permission_scopes,
-                candidate_ids=payload.candidate_ids,
+                sku_ids=payload.sku_ids,
                 document_types=payload.document_types,
             ),
             store=get_evidence_store(),
@@ -614,8 +614,8 @@ def create_product_query_plan(payload: QueryPlanInput):
         raise HTTPException(503, f"查询计划生成失败: {exc}") from exc
 
 
-@router.post("/product-search/candidates")
-def query_product_candidates(
+@router.post("/product-search/skus")
+def query_product_skus(
     plan: QueryPlan,
     x_tenant_id: str = Header(...),
     db: Session = Depends(get_db),
@@ -623,10 +623,10 @@ def query_product_candidates(
     if not plan.executable:
         raise HTTPException(422, {"code": "clarification_required", "items": [item.model_dump() for item in plan.clarifications]})
     try:
-        candidate_ids = select_candidate_ids(db, plan, tenant_id=x_tenant_id)
+        sku_ids = select_sku_ids(db, plan, tenant_id=x_tenant_id)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
-    return {"candidate_ids": candidate_ids, "candidate_count": len(candidate_ids), "semantic_requirements": plan.semantic_requirements}
+    return {"sku_ids": sku_ids, "sku_count": len(sku_ids), "semantic_requirements": plan.semantic_requirements}
 
 
 @router.post("/product-search")
@@ -660,10 +660,10 @@ def search_product(
                     "items": [item.model_dump() for item in plan.clarifications],
                 },
             )
-        candidate_ids = select_candidate_ids(db, plan, tenant_id=x_tenant_id)
-        if not candidate_ids:
-            return {"query_plan": plan, "candidate_ids": [], "searches": [], "chunks": [],
-                    **({"evidence_packs": [], "evidence_status": "no_candidates"} if payload.include_evidence_pack else {})}
+        sku_ids = select_sku_ids(db, plan, tenant_id=x_tenant_id)
+        if not sku_ids:
+            return {"query_plan": plan, "sku_ids": [], "searches": [], "chunks": [],
+                    **({"evidence_packs": [], "evidence_status": "no_skus"} if payload.include_evidence_pack else {})}
 
         store = get_evidence_store()
 
@@ -673,7 +673,7 @@ def search_product(
                 filters=EvidenceFilter(
                     tenant_id=x_tenant_id,
                     permission_scopes=permission_scopes,
-                    candidate_ids=candidate_ids,
+                    sku_ids=sku_ids,
                 ),
                 store=store,
                 embedder=embedder,
@@ -708,7 +708,7 @@ def search_product(
         chunks = [
             {
                 "chunk_id": item.chunk_id,
-                "candidate_id": item.candidate_id,
+                "sku_id": item.sku_id,
                 "content": item.content,
                 "score": item.rerank_score,
                 "metadata": item.metadata,
@@ -718,7 +718,7 @@ def search_product(
         ]
         response = {
             "query_plan": plan,
-            "candidate_ids": candidate_ids,
+            "sku_ids": sku_ids,
             "searches": searches,
             "chunks": chunks,
         }
@@ -730,7 +730,7 @@ def search_product(
             response["chunks"] = [dict(hit, content=source_by_id[hit["chunk_id"]]["content"])
                 for hit in chunks if hit["chunk_id"] in source_by_id]
             response["evidence_packs"] = build_evidence_packs(
-                candidate_ids=candidate_ids,
+                sku_ids=sku_ids,
                 requirements=[r.model_dump() for r in plan.semantic_requirements],
                 sources=sources, extract=model_extractor(model))
             response["evidence_status"] = "reviewed" if plan.semantic_requirements else "not_requested"

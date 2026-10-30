@@ -32,7 +32,7 @@ def test_real_model_extraction_is_preserved_in_branch_evidence_pack():
         return [
             SimpleNamespace(
                 chunk_id="chunk-rag-001",
-                candidate_id="A0001",
+                sku_id="A0001",
                 content="参与 RAG 知识库项目，负责文档切分与向量入库。",
                 rerank_score=0.95,
                 metadata={},
@@ -45,7 +45,7 @@ def test_real_model_extraction_is_preserved_in_branch_evidence_pack():
             {
                 "chunk_id": "chunk-rag-001",
                 "citation_id": "chunk-rag-001",
-                "candidate_id": "A0001",
+                "sku_id": "A0001",
                 "content": "参与 RAG 知识库项目，负责文档切分与向量入库。",
                 "document_title": "候选人项目材料",
                 "requirement_ids": ["branch_requirement"],
@@ -64,7 +64,7 @@ def test_real_model_extraction_is_preserved_in_branch_evidence_pack():
         service,
         ToolExecutor(
             tool_policies={
-                "search_candidate_evidence": ToolPolicy(
+                "search_sku_evidence": ToolPolicy(
                     max_attempts=1,
                     timeout_seconds=None,
                     backoff_seconds=0,
@@ -76,7 +76,7 @@ def test_real_model_extraction_is_preserved_in_branch_evidence_pack():
         AssessmentWorkItem.model_validate(
             {
                 "task_id": "A0001:1",
-                "candidate_id": "A0001",
+                "sku_id": "A0001",
                 "dimension_number": 1,
                 "dimension": {
                     "name": "RAG 项目落地经验",

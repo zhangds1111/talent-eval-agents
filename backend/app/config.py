@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     rerank_top_n: int = 20
     milvus_uri: str = "http://127.0.0.1:19531"
     milvus_token: str = "root:Milvus"
-    milvus_collection: str = "talent_evidence_v2"
+    milvus_collection: str = "product_evidence_v1"
     log_dir: str = "logs"
     service_name: str = "backend"
 

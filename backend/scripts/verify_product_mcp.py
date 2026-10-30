@@ -130,7 +130,7 @@ async def verify_protocol(server) -> dict[str, object]:
             "protocol": client.protocol_version,
             "tools": [item.name for item in tools.tools],
             "resource_templates": [item.uri_template for item in templates.resource_templates],
-            "resource_sku": json.loads(resource.contents[0].text)["candidate_id"],
+            "resource_sku": json.loads(resource.contents[0].text)["sku_id"],
             "prompt_role": prompt.messages[0].role,
         }
 

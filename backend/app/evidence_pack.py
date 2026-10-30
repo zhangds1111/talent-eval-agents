@@ -245,18 +245,18 @@ def _evidence_status(*, facts, conflicts, fully_supported, missing_information):
     return 'missing'
 
 
-def build_evidence_packs(*, candidate_ids, requirements, sources, extract):
+def build_evidence_packs(*, sku_ids, requirements, sources, extract):
     logger.info(
         'event=evidence_pack_started function=build_evidence_packs '
-        'candidate_count=%s requirement_count=%s source_count=%s',
-        len(candidate_ids), len(requirements), len(sources),
+        'sku_count=%s requirement_count=%s source_count=%s',
+        len(sku_ids), len(requirements), len(sources),
     )
     packs = []
-    for candidate_id in dict.fromkeys(candidate_ids):
+    for sku_id in dict.fromkeys(sku_ids):
         items = []
         for requirement in requirements:
             rows = list({row['chunk_id']: row for row in sources
-                if row['candidate_id'] == candidate_id
+                if row['sku_id'] == sku_id
                 and requirement['requirement_id'] in row['requirement_ids']}.values())
             item = {**requirement, 'status': 'missing', 'reason': 'no_accessible_hits',
                     'extraction_status': 'not_run', 'facts': [], 'conflicts': [],
@@ -264,9 +264,9 @@ def build_evidence_packs(*, candidate_ids, requirements, sources, extract):
             source_chunk_ids = [row['chunk_id'] for row in rows]
             logger.info(
                 'event=evidence_requirement_started function=build_evidence_packs '
-                'candidate_id=%s requirement_id=%s query_chars=%s '
+                'sku_id=%s requirement_id=%s query_chars=%s '
                 'source_count=%s source_chunk_ids=%s',
-                candidate_id, requirement['requirement_id'],
+                sku_id, requirement['requirement_id'],
                 len(requirement.get('query', '')), len(rows), source_chunk_ids,
             )
             if rows:
@@ -275,10 +275,10 @@ def build_evidence_packs(*, candidate_ids, requirements, sources, extract):
                     data = raw if isinstance(raw, EvidenceExtraction) else EvidenceExtraction.model_validate(raw)
                     logger.info(
                         'event=evidence_model_extraction_completed '
-                        'function=build_evidence_packs candidate_id=%s '
+                        'function=build_evidence_packs sku_id=%s '
                         'requirement_id=%s fact_count=%s missing_count=%s '
                         'fully_supported=%s',
-                        candidate_id, requirement['requirement_id'], len(data.facts),
+                        sku_id, requirement['requirement_id'], len(data.facts),
                         len(data.missing_information), data.fully_supported,
                     )
                     facts = _merge_duplicate_facts(_validate_fact_sources(data.facts, rows))
@@ -294,11 +294,11 @@ def build_evidence_packs(*, candidate_ids, requirements, sources, extract):
                         logger.error(
                             'event=evidence_extraction_failed '
                             'function=_validate_fact_sources stage=source_validation '
-                            'error_type=%s error_code=%s candidate_id=%s '
+                            'error_type=%s error_code=%s sku_id=%s '
                             'requirement_id=%s chunk_id=%s fact_index=%s '
                             'source_index=%s quote_length=%s source_length=%s '
                             'source_count=%s source_chunk_ids=%s',
-                            type(exc).__name__, exc.code, candidate_id,
+                            type(exc).__name__, exc.code, sku_id,
                             requirement['requirement_id'], exc.chunk_id,
                             exc.fact_index, exc.source_index, exc.quote_length,
                             exc.source_length, len(rows), source_chunk_ids,
@@ -313,10 +313,10 @@ def build_evidence_packs(*, candidate_ids, requirements, sources, extract):
                             'event=evidence_extraction_failed '
                             'function=EvidenceExtraction.model_validate '
                             'stage=structured_output_validation error_type=%s '
-                            'error_code=schema_validation_failed candidate_id=%s '
+                            'error_code=schema_validation_failed sku_id=%s '
                             'requirement_id=%s issue_types=%s issue_locations=%s '
                             'source_count=%s source_chunk_ids=%s',
-                            type(exc).__name__, candidate_id,
+                            type(exc).__name__, sku_id,
                             requirement['requirement_id'], issue_types,
                             issue_locations, len(rows), source_chunk_ids,
                         )
@@ -324,10 +324,10 @@ def build_evidence_packs(*, candidate_ids, requirements, sources, extract):
                         logger.error(
                             'event=evidence_extraction_failed function=extract '
                             'stage=model_extraction error_type=%s '
-                            'error_code=model_extraction_failed candidate_id=%s '
+                            'error_code=model_extraction_failed sku_id=%s '
                             'requirement_id=%s query_chars=%s source_count=%s '
                             'source_chunk_ids=%s',
-                            type(exc).__name__, candidate_id,
+                            type(exc).__name__, sku_id,
                             requirement['requirement_id'],
                             len(requirement.get('query', '')), len(rows),
                             source_chunk_ids,
@@ -336,13 +336,13 @@ def build_evidence_packs(*, candidate_ids, requirements, sources, extract):
                     item.update(status='partial', reason='extraction_failed', extraction_status='failed')
             logger.info(
                 'event=evidence_requirement_completed function=build_evidence_packs '
-                'candidate_id=%s requirement_id=%s status=%s reason=%s '
+                'sku_id=%s requirement_id=%s status=%s reason=%s '
                 'extraction_status=%s fact_count=%s conflict_count=%s '
                 'missing_count=%s',
-                candidate_id, requirement['requirement_id'], item['status'],
+                sku_id, requirement['requirement_id'], item['status'],
                 item['reason'], item['extraction_status'], len(item['facts']),
                 len(item['conflicts']), len(item['missing_information']),
             )
             items.append(item)
-        packs.append({'schema_version': '2.0', 'candidate_id': candidate_id, 'requirements': items})
+        packs.append({'schema_version': '2.0', 'sku_id': sku_id, 'requirements': items})
     return packs

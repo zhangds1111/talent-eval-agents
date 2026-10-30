@@ -50,7 +50,7 @@ class DimensionValidationIssue(BaseModel):
 
 class AssessmentWorkItem(BaseModel):
     task_id: str
-    candidate_id: str
+    sku_id: str
     dimension_number: int = Field(ge=1)
     dimension: EvaluationDimension
 
@@ -94,7 +94,7 @@ class BranchEvidenceDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task_id: str
-    candidate_id: str
+    sku_id: str
     dimension_number: int = Field(ge=1)
     execution_status: Literal["succeeded", "degraded", "failed"] = Field(
         validation_alias=AliasChoices("execution_status", "status")
@@ -109,8 +109,8 @@ class ProductEvaluationDispatchState(TypedDict, total=False):
     product_request: dict[str, Any]
     query_plan: dict[str, Any]
     dimensions: list[dict[str, Any]]
-    candidate_ids: list[str]
-    candidates_preselected: bool
+    sku_ids: list[str]
+    skus_preselected: bool
     work_items: list[dict[str, Any]]
     branch_results: Annotated[list[dict[str, Any]], operator.add]
     validation_issues: list[dict[str, Any]]
@@ -124,7 +124,7 @@ DimensionGenerator = Callable[
     [dict[str, Any], dict[str, Any]],
     EvaluationDimensionPlan,
 ]
-CandidateProvider = Callable[[dict[str, Any], DecisionContext], list[str]]
+SkuProvider = Callable[[dict[str, Any], DecisionContext], list[str]]
 BranchWorker = Callable[[AssessmentWorkItem, DecisionContext], BranchEvidenceDraft]
 ModelProvider = Callable[[], Any]
 EvidenceSearch = Callable[..., list[Any]]
@@ -155,37 +155,37 @@ def build_branch_evidence_provider(
     load_sources: EvidenceSourceLoader,
     extract: Callable[[dict[str, Any], list[dict[str, Any]]], Any],
 ):
-    """Return authorized chunks together with Candidate Evidence Pack 2.0."""
+    """Return authorized chunks together with Sku Evidence Pack 2.0."""
 
     def evidence_provider(
         *,
         query: str,
-        candidate_ids: list[str],
+        sku_ids: list[str],
         tenant_id: str,
         permission_scopes: list[str],
         include_evidence_pack: bool,
     ) -> dict[str, Any]:
         logger.info(
             "event=evidence_provider_started function=evidence_provider "
-            "candidate_ids=%s query_chars=%s permission_scope_count=%s "
+            "sku_ids=%s query_chars=%s permission_scope_count=%s "
             "include_evidence_pack=%s",
-            candidate_ids, len(query), len(permission_scopes), include_evidence_pack,
+            sku_ids, len(query), len(permission_scopes), include_evidence_pack,
         )
         ranked = search(
             query=query,
-            candidate_ids=candidate_ids,
+            sku_ids=sku_ids,
             tenant_id=tenant_id,
             permission_scopes=permission_scopes,
         )
         logger.info(
             "event=evidence_search_completed function=evidence_provider "
-            "candidate_ids=%s hit_count=%s chunk_ids=%s",
-            candidate_ids, len(ranked), [item.chunk_id for item in ranked],
+            "sku_ids=%s hit_count=%s chunk_ids=%s",
+            sku_ids, len(ranked), [item.chunk_id for item in ranked],
         )
         hits = [
             {
                 "chunk_id": item.chunk_id,
-                "candidate_id": item.candidate_id,
+                "sku_id": item.sku_id,
                 "content": item.content,
                 "score": item.rerank_score,
                 "metadata": item.metadata,
@@ -200,14 +200,14 @@ def build_branch_evidence_provider(
         )
         logger.info(
             "event=evidence_sources_loaded function=evidence_provider "
-            "candidate_ids=%s requested_chunk_count=%s trusted_source_count=%s "
+            "sku_ids=%s requested_chunk_count=%s trusted_source_count=%s "
             "trusted_chunk_ids=%s",
-            candidate_ids, len(hits), len(trusted_sources),
+            sku_ids, len(hits), len(trusted_sources),
             [item["chunk_id"] for item in trusted_sources],
         )
         evidence_packs = (
             build_evidence_packs(
-                candidate_ids=candidate_ids,
+                sku_ids=sku_ids,
                 requirements=[
                     {
                         "requirement_id": "branch_requirement",
@@ -222,11 +222,11 @@ def build_branch_evidence_provider(
         )
         logger.info(
             "event=evidence_provider_completed function=evidence_provider "
-            "candidate_ids=%s trusted_source_count=%s evidence_pack_count=%s",
-            candidate_ids, len(trusted_sources), len(evidence_packs),
+            "sku_ids=%s trusted_source_count=%s evidence_pack_count=%s",
+            sku_ids, len(trusted_sources), len(evidence_packs),
         )
         return {
-            "candidate_ids": candidate_ids,
+            "sku_ids": sku_ids,
             "chunks": trusted_sources,
             "evidence_packs": evidence_packs,
         }
@@ -334,8 +334,8 @@ def build_evidence_branch_worker(service: Any, executor: ToolExecutor) -> Branch
     ) -> BranchEvidenceDraft:
         logger.info(
             "event=branch_worker_started function=branch_worker task_id=%s "
-            "candidate_id=%s dimension_number=%s requirement_count=%s",
-            work_item.task_id, work_item.candidate_id,
+            "sku_id=%s dimension_number=%s requirement_count=%s",
+            work_item.task_id, work_item.sku_id,
             work_item.dimension_number,
             len(work_item.dimension.evidence_requirements),
         )
@@ -357,25 +357,25 @@ def build_evidence_branch_worker(service: Any, executor: ToolExecutor) -> Branch
             query = _branch_query(work_item.dimension, requirement)
             logger.info(
                 "event=branch_requirement_started function=branch_worker "
-                "task_id=%s candidate_id=%s dimension_number=%s "
+                "task_id=%s sku_id=%s dimension_number=%s "
                 "requirement_id=%s query_chars=%s",
-                work_item.task_id, work_item.candidate_id,
+                work_item.task_id, work_item.sku_id,
                 work_item.dimension_number, requirement_id, len(query),
             )
-            with extraction_scope(context, candidate_id=work_item.candidate_id,
+            with extraction_scope(context, sku_id=work_item.sku_id,
                                   dimension_number=work_item.dimension_number,
                                   requirement_id=requirement_id, task_id=work_item.task_id):
                 envelope = executor.execute(
-                    "search_candidate_evidence",
-                    lambda query=query: service.search_candidate_evidence(
+                    "search_sku_evidence",
+                    lambda query=query: service.search_sku_evidence(
                         query,
-                        [work_item.candidate_id],
+                        [work_item.sku_id],
                         context=tool_context,
                     ),
                     context=tool_context,
                     arguments={
                         "query": query,
-                        "candidate_ids": [work_item.candidate_id],
+                        "sku_ids": [work_item.sku_id],
                     },
                 )
             meta = envelope.get("meta") or {}
@@ -385,9 +385,9 @@ def build_evidence_branch_worker(service: Any, executor: ToolExecutor) -> Branch
                 error = envelope.get("error") or {}
                 logger.error(
                     "event=branch_requirement_failed function=branch_worker "
-                    "task_id=%s candidate_id=%s dimension_number=%s "
+                    "task_id=%s sku_id=%s dimension_number=%s "
                     "requirement_id=%s call_id=%s error_code=%s degraded=%s",
-                    work_item.task_id, work_item.candidate_id,
+                    work_item.task_id, work_item.sku_id,
                     work_item.dimension_number, requirement_id, call_id,
                     error.get("code") or "tool_failed", meta.get("degraded"),
                 )
@@ -407,7 +407,7 @@ def build_evidence_branch_worker(service: Any, executor: ToolExecutor) -> Branch
                 (
                     item
                     for item in data.get("evidence_packs", [])
-                    if item.get("candidate_id") == work_item.candidate_id
+                    if item.get("sku_id") == work_item.sku_id
                 ),
                 None,
             )
@@ -419,9 +419,9 @@ def build_evidence_branch_worker(service: Any, executor: ToolExecutor) -> Branch
             if not isinstance(raw_requirement, dict):
                 logger.error(
                     "event=branch_requirement_failed function=branch_worker "
-                    "task_id=%s candidate_id=%s dimension_number=%s "
+                    "task_id=%s sku_id=%s dimension_number=%s "
                     "requirement_id=%s call_id=%s error_code=evidence_pack_missing",
-                    work_item.task_id, work_item.candidate_id,
+                    work_item.task_id, work_item.sku_id,
                     work_item.dimension_number, requirement_id, call_id,
                 )
                 return (
@@ -446,10 +446,10 @@ def build_evidence_branch_worker(service: Any, executor: ToolExecutor) -> Branch
             )
             logger.info(
                 "event=branch_requirement_completed function=branch_worker "
-                "task_id=%s candidate_id=%s dimension_number=%s "
+                "task_id=%s sku_id=%s dimension_number=%s "
                 "requirement_id=%s call_id=%s status=%s reason=%s "
                 "extraction_status=%s fact_count=%s citation_count=%s",
-                work_item.task_id, work_item.candidate_id,
+                work_item.task_id, work_item.sku_id,
                 work_item.dimension_number, requirement_id, call_id,
                 result.status, result.reason, result.extraction_status,
                 len(result.facts), len(result.citations),
@@ -481,7 +481,7 @@ def build_evidence_branch_worker(service: Any, executor: ToolExecutor) -> Branch
 
         branch_result = BranchEvidenceDraft(
             task_id=work_item.task_id,
-            candidate_id=work_item.candidate_id,
+            sku_id=work_item.sku_id,
             dimension_number=work_item.dimension_number,
             execution_status="degraded" if degraded else "succeeded",
             requirements=requirement_results,
@@ -489,9 +489,9 @@ def build_evidence_branch_worker(service: Any, executor: ToolExecutor) -> Branch
         )
         logger.info(
             "event=branch_worker_completed function=branch_worker task_id=%s "
-            "candidate_id=%s dimension_number=%s execution_status=%s "
+            "sku_id=%s dimension_number=%s execution_status=%s "
             "requirement_count=%s tool_call_count=%s",
-            work_item.task_id, work_item.candidate_id,
+            work_item.task_id, work_item.sku_id,
             work_item.dimension_number, branch_result.execution_status,
             len(branch_result.requirements), len(branch_result.tool_call_ids),
         )
@@ -500,8 +500,8 @@ def build_evidence_branch_worker(service: Any, executor: ToolExecutor) -> Branch
     return branch_worker
 
 
-def build_query_plan_candidate_provider(service: Any) -> CandidateProvider:
-    def candidate_provider(
+def build_query_plan_sku_provider(service: Any) -> SkuProvider:
+    def sku_provider(
         query_plan: dict[str, Any],
         context: DecisionContext,
     ) -> list[str]:
@@ -509,7 +509,7 @@ def build_query_plan_candidate_provider(service: Any) -> CandidateProvider:
             FilterCondition.model_validate(item)
             for item in query_plan.get("filters", [])
         ]
-        return service.filter_candidates(
+        return service.filter_skus(
             filters,
             context=ProductToolContext(
                 tenant_id=context.tenant_id,
@@ -519,7 +519,7 @@ def build_query_plan_candidate_provider(service: Any) -> CandidateProvider:
             ),
         )
 
-    return candidate_provider
+    return sku_provider
 
 
 def validate_dimension_plan(
@@ -555,11 +555,11 @@ def _receive_input(
         raise ValueError("product_request 不能为空")
     if not state.get("query_plan"):
         raise ValueError("query_plan 不能为空")
-    candidates_preselected = "candidate_ids" in state
+    skus_preselected = "sku_ids" in state
     return {
         "dimensions": [],
-        "candidate_ids": list(state.get("candidate_ids", [])),
-        "candidates_preselected": candidates_preselected,
+        "sku_ids": list(state.get("sku_ids", [])),
+        "skus_preselected": skus_preselected,
         "work_items": [],
         "branch_results": [],
         "validation_issues": [],
@@ -613,31 +613,31 @@ def _validate_dimensions(state: ProductEvaluationDispatchState) -> dict[str, Any
 
 def _route_dimension_validation(
     state: ProductEvaluationDispatchState,
-) -> Literal["retrieve_candidates", "prepare_work_items", "dimension_invalid"]:
+) -> Literal["retrieve_skus", "prepare_work_items", "dimension_invalid"]:
     if state.get("validation_issues"):
         return "dimension_invalid"
-    if state.get("candidates_preselected"):
+    if state.get("skus_preselected"):
         return "prepare_work_items"
-    return "retrieve_candidates"
+    return "retrieve_skus"
 
 
-def _retrieve_candidates(candidate_provider: CandidateProvider):
-    def retrieve_candidates(
+def _retrieve_skus(sku_provider: SkuProvider):
+    def retrieve_skus(
         state: ProductEvaluationDispatchState,
         runtime: Runtime[DecisionContext],
     ) -> dict[str, Any]:
-        candidate_ids = candidate_provider(state["query_plan"], runtime.context)
+        sku_ids = sku_provider(state["query_plan"], runtime.context)
         logger.info(
-            "event=graph_node_completed function=retrieve_candidates "
-            "node=retrieve_candidates candidate_count=%s candidate_ids=%s",
-            len(candidate_ids), candidate_ids,
+            "event=graph_node_completed function=retrieve_skus "
+            "node=retrieve_skus sku_count=%s sku_ids=%s",
+            len(sku_ids), sku_ids,
         )
         return {
-            "candidate_ids": candidate_ids,
-            "status": "candidates_ready" if candidate_ids else "no_candidates",
+            "sku_ids": sku_ids,
+            "status": "skus_ready" if sku_ids else "no_skus",
         }
 
-    return retrieve_candidates
+    return retrieve_skus
 
 
 def _prepare_work_items(max_work_items: int):
@@ -645,13 +645,13 @@ def _prepare_work_items(max_work_items: int):
         dimensions = [
             EvaluationDimension.model_validate(item) for item in state["dimensions"]
         ]
-        required_work_items = len(state["candidate_ids"]) * len(dimensions)
+        required_work_items = len(state["sku_ids"]) * len(dimensions)
         if required_work_items > max_work_items:
             logger.error(
                 "event=graph_capacity_exceeded function=prepare_work_items "
-                "node=prepare_work_items candidate_count=%s dimension_count=%s "
+                "node=prepare_work_items sku_count=%s dimension_count=%s "
                 "required_work_items=%s work_item_limit=%s",
-                len(state["candidate_ids"]), len(dimensions),
+                len(state["sku_ids"]), len(dimensions),
                 required_work_items, max_work_items,
             )
             return {
@@ -663,26 +663,26 @@ def _prepare_work_items(max_work_items: int):
         numbered_dimensions = list(enumerate(dimensions, start=1))
         work_items = [
             AssessmentWorkItem(
-                task_id=f"{candidate_id}:{dimension_number}",
-                candidate_id=candidate_id,
+                task_id=f"{sku_id}:{dimension_number}",
+                sku_id=sku_id,
                 dimension_number=dimension_number,
                 dimension=dimension,
             ).model_dump(mode="json")
-            for candidate_id in state["candidate_ids"]
+            for sku_id in state["sku_ids"]
             for dimension_number, dimension in numbered_dimensions
         ]
         logger.info(
             "event=graph_node_completed function=prepare_work_items "
-            "node=prepare_work_items candidate_count=%s dimension_count=%s "
+            "node=prepare_work_items sku_count=%s dimension_count=%s "
             "work_item_count=%s task_ids=%s",
-            len(state["candidate_ids"]), len(dimensions), len(work_items),
+            len(state["sku_ids"]), len(dimensions), len(work_items),
             [item["task_id"] for item in work_items],
         )
         return {
             "work_items": work_items,
             "required_work_items": required_work_items,
             "work_item_limit": max_work_items,
-            "status": "work_items_ready" if work_items else "no_candidates",
+            "status": "work_items_ready" if work_items else "no_skus",
         }
 
     return prepare_work_items
@@ -706,7 +706,7 @@ def _dispatch_work_items(state: ProductEvaluationDispatchState):
     if state.get("status") == "capacity_exceeded":
         return "capacity_exceeded"
     if not state.get("work_items"):
-        return "no_candidates"
+        return "no_skus"
     return build_work_item_sends(state["work_items"])
 
 
@@ -718,8 +718,8 @@ def _run_assessment_branch(branch_worker: BranchWorker):
         work_item = AssessmentWorkItem.model_validate(state["work_item"])
         logger.info(
             "event=graph_branch_started function=run_assessment_branch "
-            "node=run_assessment_branch task_id=%s candidate_id=%s dimension_number=%s",
-            work_item.task_id, work_item.candidate_id,
+            "node=run_assessment_branch task_id=%s sku_id=%s dimension_number=%s",
+            work_item.task_id, work_item.sku_id,
             work_item.dimension_number,
         )
         try:
@@ -727,14 +727,14 @@ def _run_assessment_branch(branch_worker: BranchWorker):
         except TimeoutError as exc:
             logger.error(
                 "event=graph_branch_failed function=run_assessment_branch "
-                "node=run_assessment_branch task_id=%s candidate_id=%s "
+                "node=run_assessment_branch task_id=%s sku_id=%s "
                 "dimension_number=%s error_code=branch_timeout error_type=%s",
-                work_item.task_id, work_item.candidate_id,
+                work_item.task_id, work_item.sku_id,
                 work_item.dimension_number, type(exc).__name__,
             )
             result = BranchEvidenceDraft(
                 task_id=work_item.task_id,
-                candidate_id=work_item.candidate_id,
+                sku_id=work_item.sku_id,
                 dimension_number=work_item.dimension_number,
                 execution_status="failed",
                 error_code="branch_timeout",
@@ -743,14 +743,14 @@ def _run_assessment_branch(branch_worker: BranchWorker):
         except BranchExecutionError as exc:
             logger.error(
                 "event=graph_branch_failed function=run_assessment_branch "
-                "node=run_assessment_branch task_id=%s candidate_id=%s "
+                "node=run_assessment_branch task_id=%s sku_id=%s "
                 "dimension_number=%s error_code=%s error_type=%s",
-                work_item.task_id, work_item.candidate_id,
+                work_item.task_id, work_item.sku_id,
                 work_item.dimension_number, exc.code, type(exc).__name__,
             )
             result = BranchEvidenceDraft(
                 task_id=work_item.task_id,
-                candidate_id=work_item.candidate_id,
+                sku_id=work_item.sku_id,
                 dimension_number=work_item.dimension_number,
                 execution_status="failed",
                 error_code=exc.code,
@@ -759,9 +759,9 @@ def _run_assessment_branch(branch_worker: BranchWorker):
         except Exception as exc:
             logger.exception(
                 "event=graph_branch_crashed function=run_assessment_branch "
-                "node=run_assessment_branch task_id=%s candidate_id=%s "
+                "node=run_assessment_branch task_id=%s sku_id=%s "
                 "dimension_number=%s error_type=%s",
-                work_item.task_id, work_item.candidate_id,
+                work_item.task_id, work_item.sku_id,
                 work_item.dimension_number, type(exc).__name__,
             )
             raise
@@ -801,8 +801,8 @@ def _dimension_invalid(state: ProductEvaluationDispatchState) -> dict[str, Any]:
     }
 
 
-def _no_candidates(_: ProductEvaluationDispatchState) -> dict[str, Any]:
-    return {"status": "no_candidates", "work_items": [], "branch_results": []}
+def _no_skus(_: ProductEvaluationDispatchState) -> dict[str, Any]:
+    return {"status": "no_skus", "work_items": [], "branch_results": []}
 
 
 def _capacity_exceeded(state: ProductEvaluationDispatchState) -> dict[str, Any]:
@@ -817,7 +817,7 @@ def _capacity_exceeded(state: ProductEvaluationDispatchState) -> dict[str, Any]:
 def build_product_evaluation_dispatch_graph(
     *,
     dimension_generator: DimensionGenerator,
-    candidate_provider: CandidateProvider,
+    sku_provider: SkuProvider,
     branch_worker: BranchWorker,
     max_work_items: int = 24,
 ):
@@ -830,12 +830,12 @@ def build_product_evaluation_dispatch_graph(
     builder.add_node("receive_input", _receive_input)
     builder.add_node("generate_dimensions", _generate_dimensions(dimension_generator))
     builder.add_node("validate_dimensions", _validate_dimensions)
-    builder.add_node("retrieve_candidates", _retrieve_candidates(candidate_provider))
+    builder.add_node("retrieve_skus", _retrieve_skus(sku_provider))
     builder.add_node("prepare_work_items", _prepare_work_items(max_work_items))
     builder.add_node("run_assessment_branch", _run_assessment_branch(branch_worker))
     builder.add_node("finalize", _finalize)
     builder.add_node("dimension_invalid", _dimension_invalid)
-    builder.add_node("no_candidates", _no_candidates)
+    builder.add_node("no_skus", _no_skus)
     builder.add_node("capacity_exceeded", _capacity_exceeded)
     builder.add_edge(START, "receive_input")
     builder.add_edge("receive_input", "generate_dimensions")
@@ -844,15 +844,15 @@ def build_product_evaluation_dispatch_graph(
         "validate_dimensions",
         _route_dimension_validation,
     )
-    builder.add_edge("retrieve_candidates", "prepare_work_items")
+    builder.add_edge("retrieve_skus", "prepare_work_items")
     builder.add_conditional_edges(
         "prepare_work_items",
         _dispatch_work_items,
-        ["run_assessment_branch", "no_candidates", "capacity_exceeded"],
+        ["run_assessment_branch", "no_skus", "capacity_exceeded"],
     )
     builder.add_edge("run_assessment_branch", "finalize")
     builder.add_edge("finalize", END)
     builder.add_edge("dimension_invalid", END)
-    builder.add_edge("no_candidates", END)
+    builder.add_edge("no_skus", END)
     builder.add_edge("capacity_exceeded", END)
     return builder.compile()

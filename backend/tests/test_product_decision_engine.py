@@ -20,18 +20,18 @@ def _single_node_graph(update: dict[str, Any]):
     return builder.compile()
 
 
-def test_decision_engine_maps_confirmed_candidates_into_evaluation_subgraph():
+def test_decision_engine_maps_confirmed_skus_into_evaluation_subgraph():
     request_graph = _single_node_graph(
         {
-            "status": "candidates_ready",
+            "status": "skus_ready",
             "product_request": {"semantic_conditions": ["AI 项目"]},
             "query_plan": {"filters": []},
-            "candidate_ids": ["C001", "C002"],
+            "sku_ids": ["C001", "C002"],
         }
     )
 
     def evaluation_node(state: dict[str, Any]) -> dict[str, Any]:
-        assert state["candidate_ids"] == ["C001", "C002"]
+        assert state["sku_ids"] == ["C001", "C002"]
         return {
             "status": "branches_ready",
             "dimensions": [{"name": "AI 经验"}],
@@ -62,7 +62,7 @@ def test_decision_engine_maps_confirmed_candidates_into_evaluation_subgraph():
     )
 
     assert result["status"] == "completed"
-    assert result["candidate_ids"] == ["C001", "C002"]
+    assert result["sku_ids"] == ["C001", "C002"]
     assert result["ranking"] == ["C001", "C002"]
     assert result["report"] == "# 人才评估报告"
 
@@ -91,8 +91,8 @@ def test_decision_engine_accepts_parent_checkpointer_for_real_interrupt_resume()
     def choose_job(_: dict[str, Any]) -> dict[str, Any]:
         decision = interrupt({"type": "job_selection"})
         return {
-            "status": "candidates_ready",
-            "candidate_ids": [decision["job_code"]],
+            "status": "skus_ready",
+            "sku_ids": [decision["job_code"]],
         }
 
     request_builder.add_node("choose_job", choose_job)
@@ -118,7 +118,7 @@ def test_decision_engine_accepts_parent_checkpointer_for_real_interrupt_resume()
     assert paused["__interrupt__"]
 
     resumed = graph.invoke(Command(resume={"job_code": "JD-AI-001"}), config, context=context)
-    assert resumed["candidate_ids"] == ["JD-AI-001"]
+    assert resumed["sku_ids"] == ["JD-AI-001"]
 
 
 def test_langgraph_registers_integrated_product_decision_engine():
@@ -138,16 +138,16 @@ def test_event_demo_prints_parent_and_child_nodes_in_execution_order():
         ("main", "begin_turn"),
         ("request_subgraph", "receive_request"),
         ("request_subgraph", "compile_request"),
-        ("request_subgraph", "filter_candidates"),
+        ("request_subgraph", "filter_skus"),
         ("main", "request_subgraph"),
         ("evaluation_subgraph", "generate_dimensions"),
-        ("evaluation_subgraph", "evaluate_candidates"),
+        ("evaluation_subgraph", "evaluate_skus"),
         ("main", "evaluation_subgraph"),
-        ("report_subgraph", "score_candidates"),
+        ("report_subgraph", "score_skus"),
         ("report_subgraph", "compose_report"),
         ("main", "report_subgraph"),
     ]
-    assert events[3]["update"]["status"] == "candidates_ready"
+    assert events[3]["update"]["status"] == "skus_ready"
     assert events[6]["update"]["status"] == "branches_ready"
     assert events[9]["update"]["ranking"] == ["C001", "C002"]
     assert events[-1]["update"]["status"] == "completed"

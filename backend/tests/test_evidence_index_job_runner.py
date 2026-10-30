@@ -52,15 +52,15 @@ def test_run_index_job_marks_job_succeeded_and_updates_index_count(monkeypatch):
         id=uuid4(),
         document_version_id=uuid4(),
         embedding_model="text-embedding-v3",
-        collection_name="talent_evidence_v1",
+        collection_name="product_evidence_v1",
         status=IndexStatus.PENDING,
     )
     version = SimpleNamespace(id=job.document_version_id, document_id=uuid4())
-    document = SimpleNamespace(id=version.document_id, tenant_id="course-demo", candidate_id="C001")
+    document = SimpleNamespace(id=version.document_id, tenant_id="course-demo", sku_id="C001")
     chunks = [
         SimpleNamespace(
             id=uuid4(),
-            candidate_id="C001",
+            sku_id="C001",
             document_version_id=version.id,
             document_type="resume",
             permission_scope="hr_private",
@@ -99,15 +99,15 @@ def test_run_index_job_marks_job_failed_when_embedding_service_unavailable(monke
         id=uuid4(),
         document_version_id=uuid4(),
         embedding_model="text-embedding-v3",
-        collection_name="talent_evidence_v1",
+        collection_name="product_evidence_v1",
         status=IndexStatus.PENDING,
     )
     version = SimpleNamespace(id=job.document_version_id, document_id=uuid4())
-    document = SimpleNamespace(id=version.document_id, tenant_id="course-demo", candidate_id="C001")
+    document = SimpleNamespace(id=version.document_id, tenant_id="course-demo", sku_id="C001")
     chunks = [
         SimpleNamespace(
             id=uuid4(),
-            candidate_id="C001",
+            sku_id="C001",
             document_version_id=version.id,
             document_type="resume",
             permission_scope="hr_private",
@@ -133,15 +133,15 @@ def test_run_index_job_rebuilds_version_index_before_upsert(monkeypatch):
         id=uuid4(),
         document_version_id=uuid4(),
         embedding_model="text-embedding-v3",
-        collection_name="talent_evidence_v1",
+        collection_name="product_evidence_v1",
         status=IndexStatus.PENDING,
     )
     version = SimpleNamespace(id=job.document_version_id, document_id=uuid4())
-    document = SimpleNamespace(id=version.document_id, tenant_id="course-demo", candidate_id="C001")
+    document = SimpleNamespace(id=version.document_id, tenant_id="course-demo", sku_id="C001")
     chunks = [
         SimpleNamespace(
             id=uuid4(),
-            candidate_id="C001",
+            sku_id="C001",
             document_version_id=version.id,
             document_type="resume",
             permission_scope="hr_private",

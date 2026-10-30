@@ -14,7 +14,7 @@ type Requirement = {
   facts: { event: string; period: string; claim: string; answer: string;
     sources: { citation_id: string; quote: string; quote_start: number; quote_end: number }[] }[];
 };
-type Pack = { candidate_id: string; requirements: Requirement[] };
+type Pack = { sku_id: string; requirements: Requirement[] };
 const statusLabels: Record<string, string> = { sufficient: '材料支持当前要求', partial: '证据待补充或核查',
   missing: '未找到可支持要求的证据', conflicting: '材料存在待核查冲突' };
 const answerLabels: Record<string, string> = { yes: '支持', no: '反向' };
@@ -39,7 +39,7 @@ export function EvidencePackPanel({ api, tenant }: { api: string; tenant: string
     try {
       const data = await read('/product-search', { method: 'POST', body: JSON.stringify({ query, include_evidence_pack: true, limit: 8 }) });
       setPacks(data.evidence_packs);
-      if (!data.candidate_ids.length) setMessage('当前结构化条件下没有候选商品');
+      if (!data.sku_ids.length) setMessage('当前结构化条件下没有候选商品');
       else if (data.evidence_status === 'not_requested') setMessage('查询未包含需要材料取证的要求');
     } catch (e) { setError(e instanceof Error ? e.message : '检索失败'); }
     finally { setBusy(false); }
@@ -61,8 +61,8 @@ export function EvidencePackPanel({ api, tenant }: { api: string; tenant: string
     {error && <p role="alert" className="chunkError">{error}</p>}
     {message && <p>{message}</p>}
     {citationBusy && <p role="status">正在核查引用权限…</p>}
-    {packs.map(pack => <section key={pack.candidate_id}>
-      <h3>{pack.candidate_id}</h3>
+    {packs.map(pack => <section key={pack.sku_id}>
+      <h3>{pack.sku_id}</h3>
       {pack.requirements.map(req => <article className="recallCard" key={req.requirement_id}>
         <h4>{req.requirement_id} · {req.query}</h4>
         <p>{statusLabels[req.status]}{req.extraction_status === 'failed' ? ' · 抽取失败，保留原始材料' : ''}</p>

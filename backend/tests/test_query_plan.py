@@ -8,7 +8,7 @@ from app.query_plan import (
     FilterCondition,
     QueryPlan,
     SemanticRequirement,
-    build_candidate_statement,
+    build_sku_statement,
     choose_optimization_strategy,
     compile_query_plan,
     execute_composite_search,
@@ -28,12 +28,12 @@ def _plan(*filters, clarifications=None):
     )
 
 
-def test_builds_parameterized_candidate_query_with_system_tenant():
+def test_builds_parameterized_sku_query_with_system_tenant():
     plan = _plan(
         FilterCondition(field="age", operator="lt", value=35),
         FilterCondition(field="region", operator="eq", value="深圳"),
     )
-    statement = build_candidate_statement(plan, tenant_id="course-demo", today=date(2026, 9, 6))
+    statement = build_sku_statement(plan, tenant_id="course-demo", today=date(2026, 9, 6))
     compiled = statement.compile(dialect=postgresql.dialect())
 
     assert "tenant_id = %(tenant_id_1)s" in str(compiled)
@@ -51,18 +51,18 @@ def test_rejects_unknown_filter_field():
 def test_refuses_to_execute_plan_with_clarification():
     plan = _plan(clarifications=[{"expression": "比较资深", "reason": "缺少年限或职级阈值"}])
     with pytest.raises(ValueError, match="待澄清"):
-        build_candidate_statement(plan, tenant_id="course-demo")
+        build_sku_statement(plan, tenant_id="course-demo")
 
 
-def test_empty_candidate_set_stops_before_semantic_search():
+def test_empty_sku_set_stops_before_semantic_search():
     calls = []
     result = execute_composite_search(
         _plan(),
-        candidate_ids=[],
+        sku_ids=[],
         search_requirement=lambda **kwargs: calls.append(kwargs),
     )
 
-    assert result["candidate_ids"] == []
+    assert result["sku_ids"] == []
     assert result["evidence_by_requirement"] == {}
     assert calls == []
 
@@ -77,12 +77,12 @@ def test_each_semantic_requirement_keeps_its_own_evidence():
     )
     result = execute_composite_search(
         plan,
-        candidate_ids=["C001"],
-        search_requirement=lambda query, candidate_ids: [{"query": query, "candidate_ids": candidate_ids}],
+        sku_ids=["C001"],
+        search_requirement=lambda query, sku_ids: [{"query": query, "sku_ids": sku_ids}],
     )
 
     assert set(result["evidence_by_requirement"]) == {"S1", "S2"}
-    assert result["evidence_by_requirement"]["S2"][0]["candidate_ids"] == ["C001"]
+    assert result["evidence_by_requirement"]["S2"][0]["sku_ids"] == ["C001"]
 
 
 def test_filter_registry_is_also_sent_to_query_compiler():

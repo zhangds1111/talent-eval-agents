@@ -48,10 +48,10 @@ def _context() -> ProductToolContext:
 def _server(tmp_path):
     def evidence_provider(**kwargs):
         return {
-            "candidate_ids": kwargs["candidate_ids"],
+            "sku_ids": kwargs["sku_ids"],
             "evidence_packs": [
-                {"schema_version": "2.0", "candidate_id": candidate_id, "requirements": []}
-                for candidate_id in kwargs["candidate_ids"]
+                {"schema_version": "2.0", "sku_id": sku_id, "requirements": []}
+                for sku_id in kwargs["sku_ids"]
             ],
         }
 
@@ -104,9 +104,9 @@ def test_mcp_tools_reuse_existing_service_and_result_protocol(tmp_path):
 
     assert skus.is_error is False
     assert skus.structured_content["data"] == ["SKU-DEMO-001"]
-    assert [item["candidate_id"] for item in profiles.structured_content["data"]] == ["SKU-DEMO-001"]
+    assert [item["sku_id"] for item in profiles.structured_content["data"]] == ["SKU-DEMO-001"]
     facts = compliance.structured_content["data"]
-    assert [item["candidate_id"] for item in facts] == ["SKU-DEMO-001"]  # 越权 SKU 不返回
+    assert [item["sku_id"] for item in facts] == ["SKU-DEMO-001"]  # 越权 SKU 不返回
     assert facts[0]["unit_economics"]["gross_margin_percent"] == 45.0
     assert {c["certification"]: c["status"] for c in facts[0]["certification_checks"]} == {
         "FCC Part 15": "missing",
@@ -141,7 +141,7 @@ def test_resources_apply_the_same_tenant_boundary(tmp_path):
     profile, rules = anyio.run(scenario)
 
     assert isinstance(profile.contents[0], TextResourceContents)
-    assert json.loads(profile.contents[0].text)["candidate_id"] == "SKU-DEMO-001"
+    assert json.loads(profile.contents[0].text)["sku_id"] == "SKU-DEMO-001"
     assert {item["certification"] for item in json.loads(rules.contents[0].text)} == {"FCC Part 15", "UN38.3"}
 
 
@@ -294,7 +294,7 @@ def test_streamable_http_token_claims_reach_business_service(tmp_path):
     result = anyio.run(scenario)
 
     assert result.is_error is False
-    assert [item["candidate_id"] for item in result.structured_content["data"]] == ["SKU-DEMO-001"]
+    assert [item["sku_id"] for item in result.structured_content["data"]] == ["SKU-DEMO-001"]
 
 
 def test_verify_auth_uses_valid_capability_discovery_for_true_audience(tmp_path):

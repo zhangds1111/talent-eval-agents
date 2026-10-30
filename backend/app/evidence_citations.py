@@ -18,7 +18,7 @@ def resolve_citation(db, chunk_id: UUID, *, tenant_id: str, permission_scopes: l
     if (doc is None or doc.tenant_id != tenant_id or doc.status != 'active'
             or doc.permission_scope not in permission_scopes
             or chunk.permission_scope not in permission_scopes
-            or chunk.candidate_id != doc.candidate_id):
+            or chunk.sku_id != doc.sku_id):
         unavailable()
     if doc.knowledge_base_id:
         kb = db.get(KnowledgeBase, doc.knowledge_base_id)
@@ -32,7 +32,7 @@ def resolve_citation(db, chunk_id: UUID, *, tenant_id: str, permission_scopes: l
         raise HTTPException(422, '引用位置无效')
     return {
         'citation_id': str(chunk.id), 'chunk_id': str(chunk.id),
-        'candidate_id': doc.candidate_id, 'document_id': str(doc.id),
+        'sku_id': doc.sku_id, 'document_id': str(doc.id),
         'document_title': doc.title, 'document_version_id': str(version.id),
         'version_no': version.version_no,
         'version_state': 'current' if version.is_current else 'historical',
@@ -56,14 +56,14 @@ def load_pack_sources(db, chunks, *, tenant_id, permission_scopes):
                 permission_scopes=permission_scopes)
         except (ValueError, HTTPException):
             continue
-        if row['candidate_id'] != hit['candidate_id'] or row['version_state'] != 'current':
+        if row['sku_id'] != hit['sku_id'] or row['version_state'] != 'current':
             continue
         expanded = [row]
         if row['parent_chunk_id']:
             try:
                 parent = resolve_citation(db, UUID(row['parent_chunk_id']), tenant_id=tenant_id,
                     permission_scopes=permission_scopes)
-                if (parent['candidate_id'] == row['candidate_id']
+                if (parent['sku_id'] == row['sku_id']
                         and parent['document_version_id'] == row['document_version_id']
                         and len(parent['content']) <= 8000):
                     expanded.append(parent)

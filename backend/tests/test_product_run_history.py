@@ -37,18 +37,18 @@ def test_completed_run_is_rebuilt_from_run_and_step_snapshots():
         _event(
             2,
             "step.started",
-            {"step_id": "filter_candidates", "kind": "tool", "title": "筛选候选人"},
+            {"step_id": "filter_skus", "kind": "tool", "title": "筛选候选人"},
             "2026-10-11T01:00:01+00:00",
         ),
         _event(
             3,
             "step.progress",
             {
-                "step_id": "filter_candidates",
+                "step_id": "filter_skus",
                 "title": "筛选候选人",
                 "completed": 1,
                 "total": 1,
-                "output": {"candidate_count": 1},
+                "output": {"sku_count": 1},
             },
             "2026-10-11T01:00:02+00:00",
         ),
@@ -56,11 +56,11 @@ def test_completed_run_is_rebuilt_from_run_and_step_snapshots():
             4,
             "step.completed",
             {
-                "step_id": "filter_candidates",
+                "step_id": "filter_skus",
                 "kind": "tool",
                 "title": "筛选候选人",
                 "summary": "命中 1 名候选人",
-                "output": {"status": "candidates_ready"},
+                "output": {"status": "skus_ready"},
             },
             "2026-10-11T01:00:03.500000+00:00",
         ),
@@ -92,7 +92,7 @@ def test_completed_run_is_rebuilt_from_run_and_step_snapshots():
     assert detail["citations"] == [{"ref": "E1", "quote": "证据原文"}]
     assert detail["steps"] == [
         {
-            "step_id": "filter_candidates",
+            "step_id": "filter_skus",
             "position": 1,
             "title": "筛选候选人",
             "kind": "tool",
@@ -100,7 +100,7 @@ def test_completed_run_is_rebuilt_from_run_and_step_snapshots():
             "completed": 1,
             "total": 1,
             "summary": "命中 1 名候选人",
-            "output": {"candidate_count": 1, "status": "candidates_ready"},
+            "output": {"sku_count": 1, "status": "skus_ready"},
             "started_at": "2026-10-11T01:00:01",
             "completed_at": "2026-10-11T01:00:03.500000",
             "duration_ms": 2500,

@@ -41,7 +41,7 @@ def test_delete_document_bundle_removes_objects_rows_and_embeddings():
     Base.metadata.create_all(engine)
     session = Session(engine)
     document = Document(
-        candidate_id="C001",
+        sku_id="C001",
         tenant_id="course-demo",
         title="林晓岚简历",
         document_type="resume",
@@ -88,7 +88,7 @@ def test_delete_document_bundle_removes_objects_rows_and_embeddings():
         DocumentChunk(
             chunking_run_id=chunk_run.id,
             document_version_id=version.id,
-            candidate_id="C001",
+            sku_id="C001",
             document_type="resume",
             permission_scope="hr_private",
             stable_key="stable-1",
@@ -101,7 +101,7 @@ def test_delete_document_bundle_removes_objects_rows_and_embeddings():
         EvidenceIndexJob(
             document_version_id=version.id,
             embedding_model="text-embedding-v3",
-            collection_name="talent_evidence_v1",
+            collection_name="product_evidence_v1",
         )
     )
     session.commit()

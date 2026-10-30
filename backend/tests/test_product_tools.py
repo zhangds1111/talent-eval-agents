@@ -23,7 +23,7 @@ from app.product_tools import (
     ToolPolicy,
     TransientToolError,
     build_product_tools,
-    build_candidate_provider,
+    build_sku_provider,
 )
 
 
@@ -73,10 +73,10 @@ def context():
     )
 
 
-def test_candidate_filter_reuses_query_plan_and_tenant_boundary(session_factory, context):
+def test_sku_filter_reuses_query_plan_and_tenant_boundary(session_factory, context):
     service = ProductToolService(session_factory=session_factory)
 
-    result = service.filter_candidates(
+    result = service.filter_skus(
         [FilterCondition(field="region", operator="eq", value="上海")],
         context=context,
     )
@@ -84,12 +84,12 @@ def test_candidate_filter_reuses_query_plan_and_tenant_boundary(session_factory,
     assert result == ["C001"]
 
 
-def test_profile_lookup_returns_only_requested_authorized_candidate(session_factory, context):
+def test_profile_lookup_returns_only_requested_authorized_sku(session_factory, context):
     service = ProductToolService(session_factory=session_factory)
 
-    result = service.get_candidate_profiles(["C001", "C002"], context=context)
+    result = service.get_sku_profiles(["C001", "C002"], context=context)
 
-    assert [item["candidate_id"] for item in result] == ["C001"]
+    assert [item["sku_id"] for item in result] == ["C001"]
     assert result[0]["name"] == "林晓岚"
 
 
@@ -98,13 +98,13 @@ def test_evidence_search_preserves_evidence_pack_v2(session_factory, context):
         assert kwargs["tenant_id"] == "tenant-a"
         assert kwargs["permission_scopes"] == ["hr_private"]
         return {
-            "candidate_ids": ["C001"],
-            "evidence_packs": [{"schema_version": "2.0", "candidate_id": "C001", "requirements": []}],
+            "sku_ids": ["C001"],
+            "evidence_packs": [{"schema_version": "2.0", "sku_id": "C001", "requirements": []}],
         }
 
     service = ProductToolService(session_factory=session_factory, evidence_provider=provider)
 
-    result = service.search_candidate_evidence("企业知识库经验", ["C001"], context=context)
+    result = service.search_sku_evidence("企业知识库经验", ["C001"], context=context)
 
     assert result["evidence_packs"][0]["schema_version"] == "2.0"
 
@@ -116,11 +116,11 @@ def test_tool_schema_hides_runtime_context(session_factory):
     schemas = {item.name: item.tool_call_schema.model_json_schema() for item in tools}
 
     assert "context" not in str(schemas)
-    assert "runtime" not in schemas["filter_candidates"]["properties"]
+    assert "runtime" not in schemas["filter_skus"]["properties"]
     assert set(schemas) == {
-        "filter_candidates",
-        "search_candidate_evidence",
-        "get_candidate_profiles",
+        "filter_skus",
+        "search_sku_evidence",
+        "get_sku_profiles",
     }
 
 
@@ -136,7 +136,7 @@ def test_tool_node_injects_runtime_context(session_factory, context):
         content="",
         tool_calls=[
             {
-                "name": "filter_candidates",
+                "name": "filter_skus",
                 "args": {"filters": [{"field": "region", "operator": "eq", "value": "上海"}]},
                 "id": "call-12",
                 "type": "tool_call",
@@ -151,11 +151,11 @@ def test_tool_node_injects_runtime_context(session_factory, context):
 
 
 def test_runtime_context_blocks_model_selected_tenant(session_factory, context):
-    def insecure_lookup(candidate_id: str, tenant_id: str):
+    def insecure_lookup(sku_id: str, tenant_id: str):
         with session_factory() as db:
             return db.scalar(
                 select(EmployeeProfile.name).where(
-                    EmployeeProfile.employee_no == candidate_id,
+                    EmployeeProfile.employee_no == sku_id,
                     EmployeeProfile.tenant_id == tenant_id,
                 )
             )
@@ -163,7 +163,7 @@ def test_runtime_context_blocks_model_selected_tenant(session_factory, context):
     assert insecure_lookup("C002", tenant_id="tenant-b") == "越权数据"
 
     service = ProductToolService(session_factory=session_factory)
-    secure_result = service.get_candidate_profiles(["C002"], context=context)
+    secure_result = service.get_sku_profiles(["C002"], context=context)
 
     assert secure_result == []
 
@@ -181,9 +181,9 @@ def test_executor_retries_transient_error_and_records_audit(context):
         attempts += 1
         if attempts < 3:
             raise TransientToolError("dependency_unavailable")
-        return {"candidate_ids": ["C001"]}
+        return {"sku_ids": ["C001"]}
 
-    result = executor.execute("filter_candidates", operation, context=context, arguments={"filters": 1})
+    result = executor.execute("filter_skus", operation, context=context, arguments={"filters": 1})
 
     assert result["ok"] is True
     assert result["meta"]["attempts"] == 3
@@ -217,7 +217,7 @@ def test_each_tool_can_override_default_policy(context):
     executor = ToolExecutor(
         policy=ToolPolicy(max_attempts=1, backoff_seconds=0),
         tool_policies={
-            "search_candidate_evidence": ToolPolicy(max_attempts=3, backoff_seconds=0),
+            "search_sku_evidence": ToolPolicy(max_attempts=3, backoff_seconds=0),
         },
     )
     attempts = {"profile": 0, "evidence": 0}
@@ -227,10 +227,10 @@ def test_each_tool_can_override_default_policy(context):
         raise TransientToolError("temporary_failure")
 
     executor.execute(
-        "get_candidate_profiles", lambda: always_fails("profile"), context=context, arguments={}
+        "get_sku_profiles", lambda: always_fails("profile"), context=context, arguments={}
     )
     executor.execute(
-        "search_candidate_evidence", lambda: always_fails("evidence"), context=context, arguments={}
+        "search_sku_evidence", lambda: always_fails("evidence"), context=context, arguments={}
     )
 
     assert attempts == {"profile": 1, "evidence": 3}
@@ -245,7 +245,7 @@ def test_circuit_opens_after_consecutive_failures(context):
 
     for _ in range(2):
         result = executor.execute(
-            "search_candidate_evidence",
+            "search_sku_evidence",
             lambda: (_ for _ in ()).throw(TransientToolError("milvus_unavailable")),
             context=context,
             arguments={},
@@ -253,7 +253,7 @@ def test_circuit_opens_after_consecutive_failures(context):
         assert result["error"]["code"] == "dependency_unavailable"
 
     blocked = executor.execute(
-        "search_candidate_evidence",
+        "search_sku_evidence",
         lambda: {"unexpected": True},
         context=context,
         arguments={},
@@ -272,7 +272,7 @@ def test_timeout_returns_without_waiting_for_slow_operation(context, caplog):
 
     with caplog.at_level("ERROR", logger="app.product_tools"):
         result = executor.execute(
-            "search_candidate_evidence",
+            "search_sku_evidence",
             lambda: time.sleep(0.2),
             context=context,
             arguments={},
@@ -284,7 +284,7 @@ def test_timeout_returns_without_waiting_for_slow_operation(context, caplog):
     assert "event=tool_call_failed" in message
     assert "function=ToolExecutor.execute" in message
     assert "failure_type=timeout" in message
-    assert "tool_name=search_candidate_evidence" in message
+    assert "tool_name=search_sku_evidence" in message
     assert "run_id=run-12" in message
     assert "error_code=dependency_unavailable" in message
 
@@ -358,22 +358,22 @@ def test_sql_audit_sink_persists_safe_summary(session_factory, context):
     )
 
     executor.execute(
-        "get_candidate_profiles",
-        lambda: [{"candidate_id": "C001"}],
+        "get_sku_profiles",
+        lambda: [{"sku_id": "C001"}],
         context=context,
-        arguments={"candidate_ids": ["C001"]},
+        arguments={"sku_ids": ["C001"]},
     )
 
     with session_factory() as db:
         row = db.scalar(select(ToolCallAudit))
     assert row.status == "succeeded"
-    assert row.argument_keys == ["candidate_ids"]
+    assert row.argument_keys == ["sku_ids"]
     assert row.actor_id == "teacher-demo"
 
 
-def test_graph_candidate_provider_adapts_decision_context(session_factory):
+def test_graph_sku_provider_adapts_decision_context(session_factory):
     service = ProductToolService(session_factory=session_factory)
-    provider = build_candidate_provider(
+    provider = build_sku_provider(
         service,
         compile_filters=lambda _: [FilterCondition(field="region", operator="eq", value="上海")],
     )
@@ -386,7 +386,7 @@ def test_graph_candidate_provider_adapts_decision_context(session_factory):
     assert result == ["C001"]
 
 
-def test_candidate_provider_is_injected_when_graph_is_built():
+def test_sku_provider_is_injected_when_graph_is_built():
     calls = []
 
     def provider(request, decision_context):
@@ -400,4 +400,4 @@ def test_candidate_provider_is_injected_when_graph_is_built():
     )
 
     assert calls == [("筛选上海候选人", "tenant-a")]
-    assert result["candidate_ids"] == ["C001"]
+    assert result["sku_ids"] == ["C001"]

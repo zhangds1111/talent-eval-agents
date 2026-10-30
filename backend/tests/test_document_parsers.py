@@ -25,7 +25,7 @@ def test_docx_parser_preserves_heading_styles_as_markdown():
 def test_langchain_csv_loader_extracts_hris_fields():
     result = parse_document(first("csv/*.csv"))
     assert result.parser_name == "langchain_csv"
-    assert "candidate_id" in result.text
+    assert "sku_id" in result.text
     assert "C001" in result.text
 
 

@@ -43,9 +43,9 @@ def test_tool_worker_preserves_extraction_identity():
     from app.product_tools import ToolExecutor, ProductToolContext
     context = DecisionContext(tenant_id='course-demo', permission_scopes=('hr_private',), run_id='real-run')
     tool_context = ProductToolContext(tenant_id='course-demo', permission_scopes=('hr_private',), actor_id='test', run_id='task')
-    with ec.extraction_scope(context, candidate_id='C001', requirement_id='1:1'):
-        result = ToolExecutor().execute('search_candidate_evidence',
+    with ec.extraction_scope(context, sku_id='C001', requirement_id='1:1'):
+        result = ToolExecutor().execute('search_sku_evidence',
             lambda: {'identity': ec.current_extraction_scope()[1]}, context=tool_context, arguments={})
     assert result['ok']
-    assert result['data']['identity']['candidate_id'] == 'C001'
+    assert result['data']['identity']['sku_id'] == 'C001'
     assert ec.current_extraction_scope() is None

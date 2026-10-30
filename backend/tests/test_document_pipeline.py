@@ -49,7 +49,7 @@ def test_queue_parse_job_creates_pending_job_and_pushes_parse_queue():
 
 
 def test_continue_document_pipeline_creates_chunk_run_and_queues_index_job(monkeypatch):
-    document = SimpleNamespace(id=uuid4(), tenant_id="course-demo", candidate_id="C001", document_type="resume")
+    document = SimpleNamespace(id=uuid4(), tenant_id="course-demo", sku_id="C001", document_type="resume")
     version = SimpleNamespace(id=uuid4(), document_id=document.id)
     fake_db = FakeDb(document=document, version=version)
     fake_redis = FakeRedis()
@@ -71,7 +71,7 @@ def test_continue_document_pipeline_creates_chunk_run_and_queues_index_job(monke
         version_id=version.id,
         settings=SimpleNamespace(
             embedding_model="text-embedding-v3",
-            milvus_collection="talent_evidence_v1",
+            milvus_collection="product_evidence_v1",
         ),
     )
 

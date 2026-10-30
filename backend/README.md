@@ -64,7 +64,7 @@ uv run --no-sync python -m scripts.verify_product_evaluation_dispatch \
 uv run --no-sync python -m scripts.verify_product_hitl_resume
 ```
 
-`build_product_request_graph(candidate_filter=None)` 保持第 14 课图形状；`langgraph.json` 注册的 `product_request` 图挂载 `database_candidate_filter`，编译出可执行计划后继续执行候选人筛选，空候选或条件矛盾时进入 interrupt 等待修订
+`build_product_request_graph(sku_filter=None)` 保持第 14 课图形状；`langgraph.json` 注册的 `product_request` 图挂载 `database_sku_filter`，编译出可执行计划后继续执行候选人筛选，空候选或条件矛盾时进入 interrupt 等待修订
 
 ## 启动 API
 

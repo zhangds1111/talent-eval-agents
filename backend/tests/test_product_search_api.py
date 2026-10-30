@@ -63,7 +63,7 @@ class FakeStore:
         return [
             EvidenceSearchResult(
                 chunk_id="chunk-001",
-                candidate_id="C001",
+                sku_id="C001",
                 content="负责企业知识库与大模型应用项目",
                 score=0.032,
                 metadata={"document_type": "markdown", "permission_scope": "hr_private"},
@@ -100,12 +100,12 @@ def test_product_search_endpoint_runs_query_plan_sql_and_hybrid_search(monkeypat
 
     assert response.status_code == 200
     body = response.json()
-    assert body["candidate_ids"] == ["C001", "C004"]
+    assert body["sku_ids"] == ["C001", "C004"]
     assert body["query_plan"]["filters"] == [{"field": "age", "operator": "lt", "value": 35}]
     assert body["chunks"] == [
         {
             "chunk_id": "chunk-001",
-            "candidate_id": "C001",
+            "sku_id": "C001",
             "content": "负责企业知识库与大模型应用项目",
             "score": 0.91,
             "metadata": {"document_type": "markdown", "permission_scope": "hr_private"},
@@ -116,7 +116,7 @@ def test_product_search_endpoint_runs_query_plan_sql_and_hybrid_search(monkeypat
         {"requirement_id": "S1", "strategy": None, "queries": ["AI 项目工作经历"], "chunk_count": 1}
     ]
     assert len(db.statements) == 1
-    assert store.filters.candidate_ids == ["C001", "C004"]
+    assert store.filters.sku_ids == ["C001", "C004"]
     assert store.filters.tenant_id == "course-demo"
     assert store.filters.permission_scopes == ["hr_private"]
 
@@ -153,7 +153,7 @@ def test_product_search_endpoint_retries_with_optimized_queries_when_first_searc
             return [
                 EvidenceSearchResult(
                     chunk_id="chunk-optimized",
-                    candidate_id="C004",
+                    sku_id="C004",
                     content="主导大模型应用项目落地",
                     score=0.03,
                     metadata={"document_type": "markdown", "permission_scope": "hr_private"},

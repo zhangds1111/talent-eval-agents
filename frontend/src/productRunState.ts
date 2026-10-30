@@ -23,7 +23,7 @@ export type RunStep = {
 
 export type Citation = {
   ref: string;
-  candidate?: string;
+  sku?: string;
   document?: string;
   quote: string;
   url?: string;

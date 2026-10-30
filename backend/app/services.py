@@ -21,7 +21,7 @@ from app.storage import build_object_key
 logger = logging.getLogger(__name__)
 
 
-def upload_document(db: Session, store: ObjectStore, *, filename: str, content: bytes, candidate_id: str, title: str, document_type: str, employee_id: UUID | None = None, knowledge_base_id: UUID | None = None, permission_scope: str = "hr_private", tenant_id: str = "course-demo") -> Document:
+def upload_document(db: Session, store: ObjectStore, *, filename: str, content: bytes, sku_id: str, title: str, document_type: str, employee_id: UUID | None = None, knowledge_base_id: UUID | None = None, permission_scope: str = "hr_private", tenant_id: str = "course-demo") -> Document:
     logger.info(
         "document_upload_started filename=%s size_bytes=%s employee_id=%s knowledge_base_id=%s document_type=%s",
         filename,
@@ -33,8 +33,8 @@ def upload_document(db: Session, store: ObjectStore, *, filename: str, content: 
     mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
     digest = hashlib.sha256(content).hexdigest()
     employee = db.get(EmployeeProfile, employee_id) if employee_id else None
-    employee_no = employee.employee_no if employee else candidate_id
-    document = Document(candidate_id=employee_no, employee_id=employee_id, knowledge_base_id=knowledge_base_id, tenant_id=tenant_id, title=title, document_type=document_type, permission_scope=permission_scope)
+    employee_no = employee.employee_no if employee else sku_id
+    document = Document(sku_id=employee_no, employee_id=employee_id, knowledge_base_id=knowledge_base_id, tenant_id=tenant_id, title=title, document_type=document_type, permission_scope=permission_scope)
     db.add(document)
     db.flush()
     document.material_no = f"MAT-{str(document.id).split('-')[0].upper()}"

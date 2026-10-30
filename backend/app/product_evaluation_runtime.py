@@ -13,7 +13,7 @@ from app.reranker import get_reranker
 from app.product_evaluation_dispatch import (
     build_branch_evidence_provider,
     build_evidence_branch_worker,
-    build_query_plan_candidate_provider,
+    build_query_plan_sku_provider,
     build_structured_dimension_generator,
     build_product_evaluation_dispatch_graph,
 )
@@ -43,18 +43,18 @@ def build_runtime_graph():
         raise RuntimeError("Rerank 服务未配置")
     store = get_evidence_store()
 
-    def search(*, query, candidate_ids, tenant_id, permission_scopes):
+    def search(*, query, sku_ids, tenant_id, permission_scopes):
         logger.info(
-            "event=hybrid_search_started function=search candidate_ids=%s "
+            "event=hybrid_search_started function=search sku_ids=%s "
             "query_chars=%s permission_scope_count=%s limit=8 rerank_top_n=20",
-            candidate_ids, len(query), len(permission_scopes),
+            sku_ids, len(query), len(permission_scopes),
         )
         results = hybrid_search_evidence(
             query=query,
             filters=EvidenceFilter(
                 tenant_id=tenant_id,
                 permission_scopes=permission_scopes,
-                candidate_ids=candidate_ids,
+                sku_ids=sku_ids,
             ),
             store=store,
             embedder=embedder,
@@ -63,9 +63,9 @@ def build_runtime_graph():
             rerank_top_n=20,
         )
         logger.info(
-            "event=hybrid_search_completed function=search candidate_ids=%s "
+            "event=hybrid_search_completed function=search sku_ids=%s "
             "hit_count=%s chunk_ids=%s",
-            candidate_ids, len(results), [item.chunk_id for item in results],
+            sku_ids, len(results), [item.chunk_id for item in results],
         )
         return results
 
@@ -104,12 +104,12 @@ def build_runtime_graph():
     )
     runtime_graph = build_product_evaluation_dispatch_graph(
         dimension_generator=build_structured_dimension_generator(lambda: model),
-        candidate_provider=build_query_plan_candidate_provider(service),
+        sku_provider=build_query_plan_sku_provider(service),
         branch_worker=build_evidence_branch_worker(
             service,
             ToolExecutor(
                 tool_policies={
-                    "search_candidate_evidence": ToolPolicy(
+                    "search_sku_evidence": ToolPolicy(
                         max_attempts=1,
                         timeout_seconds=None,
                     )
@@ -126,12 +126,12 @@ def build_runtime_graph():
     return runtime_graph
 
 
-def _load_product_facts(candidate_ids: list[str]):
+def _load_product_facts(sku_ids: list[str]):
     from app.database import SessionLocal
     from app.product_compliance import load_product_facts
 
     with SessionLocal() as db:
-        return load_product_facts(db, candidate_ids)
+        return load_product_facts(db, sku_ids)
 
 
 def build_report_runtime_graph():

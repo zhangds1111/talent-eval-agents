@@ -13,7 +13,7 @@ from app.product_decision_graph import (
 )
 
 
-def _fixture_candidate_provider(request, context):
+def _fixture_sku_provider(request, context):
     if "ai" in request["original_text"].casefold():
         return ["C001", "C004"]
     return []
@@ -25,7 +25,7 @@ def _json(value) -> str:
 
 def main() -> None:
     context = DecisionContext(tenant_id="course-demo", permission_scopes=("hr_private",))
-    graph = build_product_decision_graph(_fixture_candidate_provider)
+    graph = build_product_decision_graph(_fixture_sku_provider)
     mermaid = graph.get_graph().draw_mermaid()
     print(f"[graph mermaid]\n{mermaid}")
     print("[normal] updates")

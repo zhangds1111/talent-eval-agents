@@ -20,7 +20,7 @@ def main() -> None:
     records = [
         EvidenceRecord(
             chunk_id="00000000-0000-0000-0000-000000000001",
-            candidate_id="C001",
+            sku_id="C001",
             document_version_id="10000000-0000-0000-0000-000000000001",
             tenant_id="course-demo",
             document_type="performance_review",
@@ -35,7 +35,7 @@ def main() -> None:
         ),
         EvidenceRecord(
             chunk_id="00000000-0000-0000-0000-000000000002",
-            candidate_id="C002",
+            sku_id="C002",
             document_version_id="20000000-0000-0000-0000-000000000002",
             tenant_id="course-demo",
             document_type="resume",
@@ -65,7 +65,7 @@ def main() -> None:
                     "collection": store.collection_name,
                     "upserted": upserted,
                     "matched": len(results),
-                    "top_candidate": results[0].candidate_id,
+                    "top_sku": results[0].sku_id,
                     "top_score": round(results[0].score, 4),
                     "permission_scope": results[0].metadata["permission_scope"],
                 },

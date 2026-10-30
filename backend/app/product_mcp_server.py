@@ -70,7 +70,7 @@ def build_product_mcp_server(
         context = context_provider()
         return executor.execute(
             "filter_products",
-            lambda: service.filter_candidates(filters, context=context),
+            lambda: service.filter_skus(filters, context=context),
             context=context,
             arguments={"filters": filters},
         )
@@ -84,7 +84,7 @@ def build_product_mcp_server(
         context = context_provider()
         return executor.execute(
             "search_product_evidence",
-            lambda: service.search_candidate_evidence(query, sku_ids, context=context),
+            lambda: service.search_sku_evidence(query, sku_ids, context=context),
             context=context,
             arguments={"query": query, "sku_ids": sku_ids},
         )
@@ -97,7 +97,7 @@ def build_product_mcp_server(
         context = context_provider()
         return executor.execute(
             "get_product_profiles",
-            lambda: service.get_candidate_profiles(sku_ids, context=context),
+            lambda: service.get_sku_profiles(sku_ids, context=context),
             context=context,
             arguments={"sku_ids": sku_ids},
         )
@@ -121,7 +121,7 @@ def build_product_mcp_server(
         mime_type="application/json",
     )
     def product_profile(sku_id: str) -> dict[str, Any]:
-        items = service.get_candidate_profiles([sku_id], context=context_provider())
+        items = service.get_sku_profiles([sku_id], context=context_provider())
         if not items:
             raise ResourceNotFoundError("SKU 不存在或当前身份无权访问")
         return items[0]

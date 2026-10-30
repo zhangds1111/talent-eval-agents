@@ -6,7 +6,7 @@ from typing import Any
 STEP_BY_START_NODE = {
     "receive_request": ("understand_request", "workflow", "理解选品需求"),
     "interpret_input": ("understand_request", "workflow", "理解选品需求"),
-    "filter_candidates": ("filter_candidates", "tool", "筛选候选商品"),
+    "filter_skus": ("filter_skus", "tool", "筛选候选商品"),
     "generate_dimensions": ("build_dimensions", "workflow", "生成评估维度"),
     "prepare_work_items": (
         "parallel_assessment",
@@ -18,22 +18,22 @@ STEP_BY_START_NODE = {
         "parallel",
         "检索证据并并行评估",
     ),
-    "score_dimensions": ("score_candidates", "workflow", "证据质量门禁与排名"),
+    "score_dimensions": ("score_skus", "workflow", "证据质量门禁与排名"),
     "compose_report": ("compose_report", "workflow", "合成可引用评估报告"),
 }
 
 
 STEP_BY_COMPLETION_NODE = {
     "build_plan": ("understand_request", "workflow", "理解选品需求"),
-    "filter_candidates": ("filter_candidates", "tool", "筛选候选商品"),
+    "filter_skus": ("filter_skus", "tool", "筛选候选商品"),
     "validate_dimensions": ("build_dimensions", "workflow", "生成评估维度"),
     "finalize": (
         "parallel_assessment",
         "parallel",
         "检索证据并并行评估",
     ),
-    "aggregate_candidates": (
-        "score_candidates",
+    "aggregate_skus": (
+        "score_skus",
         "workflow",
         "证据质量门禁与排名",
     ),
@@ -62,11 +62,11 @@ def _selected_fields(value: Any, fields: tuple[str, ...]) -> dict[str, Any]:
     return {field: value[field] for field in fields if field in value}
 
 
-def _candidate_summaries(value: Any) -> list[dict[str, Any]]:
+def _sku_summaries(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     fields = (
-        "candidate_id",
+        "sku_id",
         "confirmed_score",
         "possible_score",
         "evidence_coverage_percent",
@@ -100,10 +100,10 @@ def _project_step_output(node: str, update: dict[str, Any]) -> dict[str, Any]:
                 "clarifications",
             ),
         )
-    elif node == "filter_candidates":
-        candidate_ids = update.get("candidate_ids")
-        output["candidate_ids"] = candidate_ids if isinstance(candidate_ids, list) else []
-        output["candidate_count"] = len(output["candidate_ids"])
+    elif node == "filter_skus":
+        sku_ids = update.get("sku_ids")
+        output["sku_ids"] = sku_ids if isinstance(sku_ids, list) else []
+        output["sku_count"] = len(output["sku_ids"])
     elif node in {"generate_dimensions", "validate_dimensions"}:
         dimensions = update.get("dimensions")
         if isinstance(dimensions, list):
@@ -112,10 +112,10 @@ def _project_step_output(node: str, update: dict[str, Any]) -> dict[str, Any]:
         issues = update.get("validation_issues")
         if isinstance(issues, list):
             output["validation_issues"] = issues
-    elif node == "aggregate_candidates":
+    elif node == "aggregate_skus":
         ranking = update.get("ranking")
         output["ranking"] = ranking if isinstance(ranking, list) else []
-        output["candidates"] = _candidate_summaries(update.get("candidate_assessments"))
+        output["skus"] = _sku_summaries(update.get("sku_assessments"))
     elif node == "validate_report":
         report = update.get("report")
         output["report_chars"] = len(report) if isinstance(report, str) else 0

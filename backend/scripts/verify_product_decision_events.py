@@ -49,10 +49,10 @@ def build_demo_graph():
                 },
             ),
             (
-                "filter_candidates",
+                "filter_skus",
                 lambda _: {
-                    "candidate_ids": ["C001", "C002"],
-                    "status": "candidates_ready",
+                    "sku_ids": ["C001", "C002"],
+                    "status": "skus_ready",
                 },
             ),
         ]
@@ -69,11 +69,11 @@ def build_demo_graph():
                 },
             ),
             (
-                "evaluate_candidates",
+                "evaluate_skus",
                 lambda state: {
                     "branch_results": [
-                        {"task_id": f"{candidate_id}:1", "candidate_id": candidate_id}
-                        for candidate_id in state["candidate_ids"]
+                        {"task_id": f"{sku_id}:1", "sku_id": sku_id}
+                        for sku_id in state["sku_ids"]
                     ],
                     "status": "branches_ready",
                 },
@@ -83,11 +83,11 @@ def build_demo_graph():
     report_graph = _linear_graph(
         [
             (
-                "score_candidates",
+                "score_skus",
                 lambda _: {
-                    "candidate_assessments": [
-                        {"candidate_id": "C001", "confirmed_score": 88},
-                        {"candidate_id": "C002", "confirmed_score": 76},
+                    "sku_assessments": [
+                        {"sku_id": "C001", "confirmed_score": 88},
+                        {"sku_id": "C002", "confirmed_score": 76},
                     ],
                     "ranking": ["C001", "C002"],
                     "status": "scores_ready",
@@ -158,9 +158,9 @@ def _display_update(event: dict[str, Any]) -> Any:
     if event["scope"] != "main" or not isinstance(update, dict):
         return update
     keys_by_node = {
-        "request_subgraph": ("candidate_ids", "status"),
-        "evaluation_subgraph": ("candidate_ids", "dimensions", "status"),
-        "report_subgraph": ("candidate_ids", "ranking", "report", "status"),
+        "request_subgraph": ("sku_ids", "status"),
+        "evaluation_subgraph": ("sku_ids", "dimensions", "status"),
+        "report_subgraph": ("sku_ids", "ranking", "report", "status"),
     }
     keys = keys_by_node.get(event["node"], tuple(update))
     return {key: update[key] for key in keys if key in update}

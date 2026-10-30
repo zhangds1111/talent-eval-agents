@@ -1,7 +1,7 @@
 """第 17 课：Human-in-the-Loop 与可恢复执行链路验证
 
 注入固定任务解释器和内存候选人集合，覆盖：
-- 可执行计划直达 candidates_ready
+- 可执行计划直达 skus_ready
 - 空候选集 interrupt、leave-one-out 诊断与放宽恢复
 - 矛盾条件 interrupt 与修订恢复
 - 过期 interaction_id 拒绝
@@ -25,15 +25,15 @@ def _json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, default=str)
 
 
-CANDIDATES = [
+SKUS = [
     {"id": "C001", "region": "上海", "years_of_experience": 6, "age": 29},
     {"id": "C002", "region": "上海", "years_of_experience": 12, "age": 36},
     {"id": "C003", "region": "深圳", "years_of_experience": 8, "age": 33},
 ]
 
 
-def _matches(candidate: dict, condition: FilterCondition) -> bool:
-    value = candidate.get(str(condition.field))
+def _matches(sku: dict, condition: FilterCondition) -> bool:
+    value = sku.get(str(condition.field))
     if value is None:
         return False
     target = condition.value
@@ -50,7 +50,7 @@ def _matches(candidate: dict, condition: FilterCondition) -> bool:
     return False
 
 
-class DemoCandidateFilter:
+class DemoSkuFilter:
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
 
@@ -58,7 +58,7 @@ class DemoCandidateFilter:
         self.calls.append([f"{item.field}{item.operator}{item.value}" for item in filters])
         return [
             item["id"]
-            for item in CANDIDATES
+            for item in SKUS
             if all(_matches(item, condition) for condition in filters)
         ]
 
@@ -109,10 +109,10 @@ class DemoInterpreter:
 
 def run_verification() -> None:
     interpreter = DemoInterpreter()
-    candidate_filter = DemoCandidateFilter()
+    sku_filter = DemoSkuFilter()
     graph = build_product_request_graph(
         request_interpreter=interpreter,
-        candidate_filter=candidate_filter,
+        sku_filter=sku_filter,
         checkpointer=InMemorySaver(),
     )
     context = DecisionContext(tenant_id="course-demo", permission_scopes=("hr_private",))
@@ -124,7 +124,7 @@ def run_verification() -> None:
     )
     print(
         "\n[ready]\n",
-        _json({"status": ready["status"], "candidate_ids": ready["candidate_ids"]}),
+        _json({"status": ready["status"], "sku_ids": ready["sku_ids"]}),
     )
 
     config = {"configurable": {"thread_id": "lesson17-empty"}}
@@ -157,12 +157,12 @@ def run_verification() -> None:
         _json(
             {
                 "status": resumed["status"],
-                "candidate_ids": resumed["candidate_ids"],
+                "sku_ids": resumed["sku_ids"],
                 "plan_version": resumed["plan_version"],
                 "condition_revisions": resumed["condition_revisions"],
                 "next": list(graph.get_state(config).next),
                 "interpret_calls": len(interpreter.calls),
-                "filter_calls": candidate_filter.calls,
+                "filter_calls": sku_filter.calls,
             }
         ),
     )
@@ -189,7 +189,7 @@ def run_verification() -> None:
         _json(
             {
                 "status": revised["status"],
-                "candidate_ids": revised["candidate_ids"],
+                "sku_ids": revised["sku_ids"],
                 "clarifications": revised["clarifications"],
                 "condition_revisions": revised["condition_revisions"],
             }
@@ -278,7 +278,7 @@ def run_verification() -> None:
                 "fork_from_step": fork_source.metadata.get("step"),
                 "interrupted": "__interrupt__" in replayed,
                 "status": replayed["status"],
-                "candidate_ids": replayed["candidate_ids"],
+                "sku_ids": replayed["sku_ids"],
             }
         ),
     )

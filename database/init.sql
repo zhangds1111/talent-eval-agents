@@ -55,7 +55,7 @@ CREATE TABLE knowledge_bases (
 
 CREATE TABLE documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    candidate_id VARCHAR(64) NOT NULL,
+    sku_id VARCHAR(64) NOT NULL,
     material_no VARCHAR(64) UNIQUE,
     employee_id UUID REFERENCES employee_profiles(id),
     knowledge_base_id UUID REFERENCES knowledge_bases(id),
@@ -157,7 +157,7 @@ CREATE TABLE document_chunks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     chunking_run_id UUID NOT NULL REFERENCES chunking_runs(id) ON DELETE CASCADE,
     document_version_id UUID NOT NULL REFERENCES document_versions(id),
-    candidate_id VARCHAR(64) NOT NULL,
+    sku_id VARCHAR(64) NOT NULL,
     document_type VARCHAR(64) NOT NULL,
     permission_scope VARCHAR(64) NOT NULL,
     stable_key VARCHAR(64) NOT NULL,
@@ -181,7 +181,7 @@ CREATE TABLE document_chunks (
 );
 
 CREATE INDEX idx_document_chunks_version ON document_chunks (document_version_id, position);
-CREATE INDEX idx_document_chunks_candidate ON document_chunks (candidate_id, document_type);
+CREATE INDEX idx_document_chunks_sku ON document_chunks (sku_id, document_type);
 
 CREATE TABLE evidence_index_jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -325,7 +325,7 @@ CREATE TABLE IF NOT EXISTS evaluation_annotations (
     verdict VARCHAR(32) NOT NULL,
     error_types JSON NOT NULL DEFAULT '[]',
     reason TEXT NOT NULL,
-    golden_candidate JSON,
+    golden_sku JSON,
     confidence DOUBLE PRECISION CHECK (confidence BETWEEN 0 AND 1),
     review_status VARCHAR(16) NOT NULL DEFAULT 'pending' CHECK (review_status IN ('pending', 'confirmed')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()

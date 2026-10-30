@@ -133,14 +133,14 @@
       ]
     }
   ],
-  "candidate_ids": [
+  "sku_ids": [
     "A0001",
     "C001"
   ],
   "work_items": [
     {
       "task_id": "A0001:1",
-      "candidate_id": "A0001",
+      "sku_id": "A0001",
       "dimension_number": 1,
       "dimension": {
         "name": "RAG 项目落地经验",
@@ -177,7 +177,7 @@
     },
     {
       "task_id": "A0001:2",
-      "candidate_id": "A0001",
+      "sku_id": "A0001",
       "dimension_number": 2,
       "dimension": {
         "name": "Agent 评测经验",
@@ -214,7 +214,7 @@
     },
     {
       "task_id": "A0001:3",
-      "candidate_id": "A0001",
+      "sku_id": "A0001",
       "dimension_number": 3,
       "dimension": {
         "name": "协作与交付经验",
@@ -251,7 +251,7 @@
     },
     {
       "task_id": "C001:1",
-      "candidate_id": "C001",
+      "sku_id": "C001",
       "dimension_number": 1,
       "dimension": {
         "name": "RAG 项目落地经验",
@@ -288,7 +288,7 @@
     },
     {
       "task_id": "C001:2",
-      "candidate_id": "C001",
+      "sku_id": "C001",
       "dimension_number": 2,
       "dimension": {
         "name": "Agent 评测经验",
@@ -325,7 +325,7 @@
     },
     {
       "task_id": "C001:3",
-      "candidate_id": "C001",
+      "sku_id": "C001",
       "dimension_number": 3,
       "dimension": {
         "name": "协作与交付经验",
@@ -364,7 +364,7 @@
   "branch_results": [
     {
       "task_id": "A0001:1",
-      "candidate_id": "A0001",
+      "sku_id": "A0001",
       "dimension_number": 1,
       "execution_status": "succeeded",
       "requirements": [
@@ -608,7 +608,7 @@
     },
     {
       "task_id": "A0001:2",
-      "candidate_id": "A0001",
+      "sku_id": "A0001",
       "dimension_number": 2,
       "execution_status": "succeeded",
       "requirements": [
@@ -817,7 +817,7 @@
     },
     {
       "task_id": "A0001:3",
-      "candidate_id": "A0001",
+      "sku_id": "A0001",
       "dimension_number": 3,
       "execution_status": "succeeded",
       "requirements": [
@@ -997,7 +997,7 @@
     },
     {
       "task_id": "C001:1",
-      "candidate_id": "C001",
+      "sku_id": "C001",
       "dimension_number": 1,
       "execution_status": "succeeded",
       "requirements": [
@@ -1233,7 +1233,7 @@
     },
     {
       "task_id": "C001:2",
-      "candidate_id": "C001",
+      "sku_id": "C001",
       "dimension_number": 2,
       "execution_status": "succeeded",
       "requirements": [
@@ -1375,7 +1375,7 @@
     },
     {
       "task_id": "C001:3",
-      "candidate_id": "C001",
+      "sku_id": "C001",
       "dimension_number": 3,
       "execution_status": "succeeded",
       "requirements": [

@@ -41,7 +41,7 @@ class CertificationCheck(BaseModel):
 
 
 class ProductFacts(BaseModel):
-    candidate_id: str
+    sku_id: str
     model_no: str | None = None
     unit_economics: UnitEconomics | None = None
     certification_checks: list[CertificationCheck] = []
@@ -87,8 +87,8 @@ def check_certifications(
         if rule.certification in seen or not rule_applies(rule, market=market, category=category, attrs=attrs):
             continue
         seen.add(rule.certification)
-        candidates = [item for item in records if item.certification == rule.certification]
-        checks.append(_best_match(rule, candidates, model_no=attrs.model_no, today=today))
+        skus = [item for item in records if item.certification == rule.certification]
+        checks.append(_best_match(rule, skus, model_no=attrs.model_no, today=today))
     return checks
 
 
@@ -113,22 +113,22 @@ def _best_match(rule: CertificationRule, records: list[ProductCertification], *,
     return problems[0]
 
 
-def load_product_facts(db: Session, candidate_ids: list[str], *, today: date | None = None) -> dict[str, ProductFacts]:
+def load_product_facts(db: Session, sku_ids: list[str], *, today: date | None = None) -> dict[str, ProductFacts]:
     current = today or date.today()
     rules = list(db.scalars(select(CertificationRule).order_by(CertificationRule.id)).all())
     rows = db.execute(
         select(EmployeeProfile, ProductAttributes)
         .outerjoin(ProductAttributes, ProductAttributes.product_id == EmployeeProfile.id)
-        .where(EmployeeProfile.employee_no.in_(candidate_ids))
+        .where(EmployeeProfile.employee_no.in_(sku_ids))
     ).all()
     facts: dict[str, ProductFacts] = {}
     for product, attrs in rows:
         if attrs is None:
-            facts[product.employee_no] = ProductFacts(candidate_id=product.employee_no)
+            facts[product.employee_no] = ProductFacts(sku_id=product.employee_no)
             continue
         records = list(db.scalars(select(ProductCertification).where(ProductCertification.product_id == product.id)).all())
         facts[product.employee_no] = ProductFacts(
-            candidate_id=product.employee_no,
+            sku_id=product.employee_no,
             model_no=attrs.model_no,
             unit_economics=compute_unit_economics(
                 currency=attrs.currency, target_price=float(attrs.target_price), landed_cost=float(attrs.landed_cost)

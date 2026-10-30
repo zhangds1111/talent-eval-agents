@@ -33,7 +33,7 @@ def build_evidence_records(
         records.append(
             EvidenceRecord(
                 chunk_id=str(chunk.id),
-                candidate_id=chunk.candidate_id,
+                sku_id=chunk.sku_id,
                 document_version_id=str(chunk.document_version_id),
                 tenant_id=document.tenant_id,
                 document_type=chunk.document_type,

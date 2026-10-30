@@ -47,7 +47,7 @@ def test_create_evidence_index_queues_job_for_current_document_version(monkeypat
     monkeypatch.setattr(api, "get_settings", lambda: SimpleNamespace(
         redis_url="redis://test",
         embedding_model="text-embedding-v3",
-        milvus_collection="talent_evidence_v1",
+        milvus_collection="product_evidence_v1",
     ))
     monkeypatch.setattr(api.Redis, "from_url", lambda *args, **kwargs: fake_redis)
 
@@ -77,7 +77,7 @@ def test_search_evidence_builds_filter_from_headers_and_payload(monkeypatch):
             return [
                 SimpleNamespace(
                     chunk_id="chunk-1",
-                    candidate_id="C001",
+                    sku_id="C001",
                     content="负责推荐系统升级",
                     score=0.97,
                     metadata={"permission_scope": "hr_private"},
@@ -90,7 +90,7 @@ def test_search_evidence_builds_filter_from_headers_and_payload(monkeypatch):
     result = api.search_evidence(
         EvidenceSearchInput(
             query="推荐系统负责人",
-            candidate_ids=["C001"],
+            sku_ids=["C001"],
             document_types=["resume"],
             limit=5,
             ef=60,
@@ -103,8 +103,8 @@ def test_search_evidence_builds_filter_from_headers_and_payload(monkeypatch):
     assert result == [
         {
             "chunk_id": "chunk-1",
-            "candidate_id": "C001",
-            "candidate_name": "C001",
+            "sku_id": "C001",
+            "sku_name": "C001",
             "document_id": None,
             "document_title": None,
             "material_no": None,
@@ -121,7 +121,7 @@ def test_search_evidence_builds_filter_from_headers_and_payload(monkeypatch):
     assert seen["query_vector"] == [0.1, 0.2, 0.3]
     assert seen["filters"].tenant_id == "course-demo"
     assert seen["filters"].permission_scopes == ["hr_private", "manager_private"]
-    assert seen["filters"].candidate_ids == ["C001"]
+    assert seen["filters"].sku_ids == ["C001"]
     assert seen["filters"].document_types == ["resume"]
     assert seen["limit"] == 5
     assert seen["ef"] == 60
@@ -144,7 +144,7 @@ def test_retry_index_job_requires_failed_status():
             id=job_id,
             document_version_id=uuid4(),
             embedding_model="text-embedding-v3",
-            collection_name="talent_evidence_v1",
+            collection_name="product_evidence_v1",
             status=IndexStatus.SUCCEEDED,
         )
     )
@@ -162,7 +162,7 @@ def test_delete_knowledge_base_rejects_non_empty_library():
     session.flush()
     session.add(
         Document(
-            candidate_id="C001",
+            sku_id="C001",
             knowledge_base_id=knowledge_base.id,
             tenant_id="course-demo",
             title="林晓岚简历",
@@ -190,7 +190,7 @@ def test_delete_empty_knowledge_base():
     assert session.get(KnowledgeBase, knowledge_base.id) is None
 
 
-def test_search_evidence_returns_document_and_candidate_context(monkeypatch):
+def test_search_evidence_returns_document_and_sku_context(monkeypatch):
     engine = create_engine("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)
     session = Session(engine)
@@ -198,7 +198,7 @@ def test_search_evidence_returns_document_and_candidate_context(monkeypatch):
     session.add(employee)
     session.flush()
     document = Document(
-        candidate_id="C001",
+        sku_id="C001",
         employee_id=employee.id,
         tenant_id="course-demo",
         title="林晓岚简历",
@@ -230,7 +230,7 @@ def test_search_evidence_returns_document_and_candidate_context(monkeypatch):
             return [
                 SimpleNamespace(
                     chunk_id="chunk-1",
-                    candidate_id="C001",
+                    sku_id="C001",
                     content="负责推荐系统升级",
                     score=0.97,
                     metadata={
@@ -253,7 +253,7 @@ def test_search_evidence_returns_document_and_candidate_context(monkeypatch):
         db=session,
     )
 
-    assert result[0]["candidate_name"] == "林晓岚"
+    assert result[0]["sku_name"] == "林晓岚"
     assert result[0]["document_title"] == "林晓岚简历"
     assert result[0]["material_no"] is None
     assert result[0]["page_start"] == 2

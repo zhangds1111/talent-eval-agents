@@ -42,7 +42,7 @@ def test_dimension_validation_only_rejects_weight_total_other_than_100():
     assert issues[0].message.endswith("当前为 90")
 
 
-def test_graph_dispatches_every_candidate_dimension_pair_and_aggregates_results():
+def test_graph_dispatches_every_sku_dimension_pair_and_aggregates_results():
     from app.product_decision_graph import DecisionContext
     from app.product_evaluation_dispatch import (
         BranchEvidenceDraft,
@@ -62,7 +62,7 @@ def test_graph_dispatches_every_candidate_dimension_pair_and_aggregates_results(
         assert query_plan["task_type"] == "find_product"
         return dimensions
 
-    def candidate_provider(query_plan, context):
+    def sku_provider(query_plan, context):
         assert query_plan["filters"][0]["field"] == "region"
         assert context.tenant_id == "tenant-a"
         return ["C001", "C002"]
@@ -70,7 +70,7 @@ def test_graph_dispatches_every_candidate_dimension_pair_and_aggregates_results(
     def branch_worker(work_item, context):
         return BranchEvidenceDraft(
             task_id=work_item.task_id,
-            candidate_id=work_item.candidate_id,
+            sku_id=work_item.sku_id,
             dimension_number=work_item.dimension_number,
             execution_status="succeeded",
             tool_call_ids=[f"call-{work_item.task_id}"],
@@ -78,7 +78,7 @@ def test_graph_dispatches_every_candidate_dimension_pair_and_aggregates_results(
 
     graph = build_product_evaluation_dispatch_graph(
         dimension_generator=dimension_generator,
-        candidate_provider=candidate_provider,
+        sku_provider=sku_provider,
         branch_worker=branch_worker,
     )
     result = graph.invoke(
@@ -102,7 +102,7 @@ def test_graph_dispatches_every_candidate_dimension_pair_and_aggregates_results(
     assert len(result["work_items"]) == 4
     assert len(result["branch_results"]) == 4
     assert {
-        (item["candidate_id"], item["dimension_number"])
+        (item["sku_id"], item["dimension_number"])
         for item in result["branch_results"]
     } == {
         ("C001", 1),
@@ -112,7 +112,7 @@ def test_graph_dispatches_every_candidate_dimension_pair_and_aggregates_results(
     }
 
 
-def test_graph_reuses_preselected_candidates_without_querying_again():
+def test_graph_reuses_preselected_skus_without_querying_again():
     from app.product_decision_graph import DecisionContext
     from app.product_evaluation_dispatch import (
         BranchEvidenceDraft,
@@ -125,12 +125,12 @@ def test_graph_reuses_preselected_candidates_without_querying_again():
     )
     graph = build_product_evaluation_dispatch_graph(
         dimension_generator=lambda request, query_plan: plan,
-        candidate_provider=lambda query_plan, context: (_ for _ in ()).throw(
+        sku_provider=lambda query_plan, context: (_ for _ in ()).throw(
             AssertionError("主图已提供候选人时不应重复查询")
         ),
         branch_worker=lambda work_item, context: BranchEvidenceDraft(
             task_id=work_item.task_id,
-            candidate_id=work_item.candidate_id,
+            sku_id=work_item.sku_id,
             dimension_number=work_item.dimension_number,
             execution_status="succeeded",
         ),
@@ -140,14 +140,14 @@ def test_graph_reuses_preselected_candidates_without_querying_again():
         {
             "product_request": {"original_text": "招聘 AI 应用工程师"},
             "query_plan": {"task_type": "find_product", "filters": []},
-            "candidate_ids": ["C001", "C002"],
+            "sku_ids": ["C001", "C002"],
         },
         context=DecisionContext(tenant_id="tenant-a", permission_scopes=("hr_private",)),
     )
 
     assert result["status"] == "branches_ready"
-    assert result["candidate_ids"] == ["C001", "C002"]
-    assert [item["candidate_id"] for item in result["work_items"]] == ["C001", "C002"]
+    assert result["sku_ids"] == ["C001", "C002"]
+    assert [item["sku_id"] for item in result["work_items"]] == ["C001", "C002"]
 
 
 def test_graph_stops_when_dimension_weights_are_invalid():
@@ -162,7 +162,7 @@ def test_graph_stops_when_dimension_weights_are_invalid():
     )
     graph = build_product_evaluation_dispatch_graph(
         dimension_generator=lambda request, query_plan: plan,
-        candidate_provider=lambda query_plan, context: (_ for _ in ()).throw(
+        sku_provider=lambda query_plan, context: (_ for _ in ()).throw(
             AssertionError("权重错误时不应查询候选人")
         ),
         branch_worker=lambda work_item, context: (_ for _ in ()).throw(
@@ -195,18 +195,18 @@ def test_graph_records_one_branch_failure_without_losing_other_results():
     )
 
     def branch_worker(work_item, context):
-        if work_item.candidate_id == "C002":
+        if work_item.sku_id == "C002":
             raise TimeoutError("证据检索超时")
         return BranchEvidenceDraft(
             task_id=work_item.task_id,
-            candidate_id=work_item.candidate_id,
+            sku_id=work_item.sku_id,
             dimension_number=work_item.dimension_number,
             execution_status="succeeded",
         )
 
     graph = build_product_evaluation_dispatch_graph(
         dimension_generator=lambda request, query_plan: plan,
-        candidate_provider=lambda query_plan, context: ["C001", "C002"],
+        sku_provider=lambda query_plan, context: ["C001", "C002"],
         branch_worker=branch_worker,
     )
     result = graph.invoke(
@@ -217,7 +217,7 @@ def test_graph_records_one_branch_failure_without_losing_other_results():
         context=DecisionContext(tenant_id="tenant-a", permission_scopes=("hr_private",)),
     )
 
-    results = {item["candidate_id"]: item for item in result["branch_results"]}
+    results = {item["sku_id"]: item for item in result["branch_results"]}
     assert result["status"] == "branches_ready_with_failures"
     assert results["C001"]["execution_status"] == "succeeded"
     assert results["C002"]["execution_status"] == "failed"
@@ -239,7 +239,7 @@ def test_graph_stops_before_fanout_when_work_item_budget_is_exceeded():
     )
     graph = build_product_evaluation_dispatch_graph(
         dimension_generator=lambda request, query_plan: plan,
-        candidate_provider=lambda query_plan, context: ["C001", "C002", "C003"],
+        sku_provider=lambda query_plan, context: ["C001", "C002", "C003"],
         branch_worker=lambda work_item, context: (_ for _ in ()).throw(
             AssertionError("超出任务上限时不应启动分支")
         ),
@@ -305,22 +305,22 @@ def test_structured_dimension_generator_sends_request_and_query_plan_to_model():
     assert "retrieval_hints" in model.messages[0][1]
 
 
-def test_query_plan_candidate_provider_uses_only_trusted_runtime_context():
+def test_query_plan_sku_provider_uses_only_trusted_runtime_context():
     from app.product_decision_graph import DecisionContext
-    from app.product_evaluation_dispatch import build_query_plan_candidate_provider
+    from app.product_evaluation_dispatch import build_query_plan_sku_provider
 
     class RecordingService:
         def __init__(self):
             self.filters = None
             self.context = None
 
-        def filter_candidates(self, filters, *, context):
+        def filter_skus(self, filters, *, context):
             self.filters = filters
             self.context = context
             return ["C001"]
 
     service = RecordingService()
-    provider = build_query_plan_candidate_provider(service)
+    provider = build_query_plan_sku_provider(service)
     result = provider(
         {
             "filters": [{"field": "region", "operator": "eq", "value": "上海"}],
@@ -342,7 +342,7 @@ def test_sync_work_item_send_leaves_timeout_to_tool_executor():
         [
             {
                 "task_id": "C001:1",
-                "candidate_id": "C001",
+                "sku_id": "C001",
                 "dimension_number": 1,
                 "dimension": _dimension(
                     "rag_delivery",
@@ -401,8 +401,8 @@ def test_evidence_branch_worker_searches_each_requirement_and_keeps_evidence_pac
         def __init__(self):
             self.queries = []
 
-        def search_candidate_evidence(self, query, candidate_ids, *, context):
-            self.queries.append((query, candidate_ids, context))
+        def search_sku_evidence(self, query, sku_ids, *, context):
+            self.queries.append((query, sku_ids, context))
             requirement = next(
                 item
                 for item in work_item.dimension.evidence_requirements
@@ -410,11 +410,11 @@ def test_evidence_branch_worker_searches_each_requirement_and_keeps_evidence_pac
             )
             has_evidence = requirement == "项目职责"
             return {
-                "candidate_ids": candidate_ids,
+                "sku_ids": sku_ids,
                 "evidence_packs": [
                     {
                         "schema_version": "2.0",
-                        "candidate_id": "C001",
+                        "sku_id": "C001",
                         "requirements": [
                             {
                                 "requirement_id": "branch_requirement",
@@ -451,7 +451,7 @@ def test_evidence_branch_worker_searches_each_requirement_and_keeps_evidence_pac
 
     work_item = AssessmentWorkItem(
         task_id="C001:1",
-        candidate_id="C001",
+        sku_id="C001",
         dimension_number=1,
         dimension=_dimension(
             "rag_delivery",
@@ -496,7 +496,7 @@ def test_evidence_branch_worker_searches_each_requirement_and_keeps_evidence_pac
     assert "event=branch_requirement_completed" in messages
     assert "event=branch_worker_completed" in messages
     assert "task_id=C001:1" in messages
-    assert "candidate_id=C001" in messages
+    assert "sku_id=C001" in messages
 
 
 def test_evidence_branch_worker_runs_requirements_concurrently():
@@ -516,7 +516,7 @@ def test_evidence_branch_worker_runs_requirements_concurrently():
             self.active = 0
             self.max_active = 0
 
-        def search_candidate_evidence(self, query, candidate_ids, *, context):
+        def search_sku_evidence(self, query, sku_ids, *, context):
             del context
             with self.condition:
                 self.started += 1
@@ -526,11 +526,11 @@ def test_evidence_branch_worker_runs_requirements_concurrently():
                 self.condition.wait_for(lambda: self.started >= 2, timeout=0.5)
                 self.active -= 1
             return {
-                "candidate_ids": candidate_ids,
+                "sku_ids": sku_ids,
                 "evidence_packs": [
                     {
                         "schema_version": "2.0",
-                        "candidate_id": candidate_ids[0],
+                        "sku_id": sku_ids[0],
                         "requirements": [
                             {
                                 "requirement_id": "branch_requirement",
@@ -550,7 +550,7 @@ def test_evidence_branch_worker_runs_requirements_concurrently():
 
     work_item = AssessmentWorkItem(
         task_id="C001:1",
-        candidate_id="C001",
+        sku_id="C001",
         dimension_number=1,
         dimension=_dimension(
             "rag_delivery",
@@ -593,7 +593,7 @@ def test_branch_evidence_provider_builds_reviewed_pack_from_trusted_sources():
         return [
             SimpleNamespace(
                 chunk_id="chunk-1",
-                candidate_id="C001",
+                sku_id="C001",
                 content="index-copy",
                 rerank_score=0.9,
                 metadata={},
@@ -605,7 +605,7 @@ def test_branch_evidence_provider_builds_reviewed_pack_from_trusted_sources():
             {
                 "chunk_id": "chunk-1",
                 "citation_id": "citation-1",
-                "candidate_id": "C001",
+                "sku_id": "C001",
                 "content": "主导星河项目上线",
                 "document_title": "项目复盘",
                 "requirement_ids": ["branch_requirement"],
@@ -634,7 +634,7 @@ def test_branch_evidence_provider_builds_reviewed_pack_from_trusted_sources():
 
     result = provider(
         query="RAG 项目职责",
-        candidate_ids=["C001"],
+        sku_ids=["C001"],
         tenant_id="tenant-a",
         permission_scopes=["hr_private"],
         include_evidence_pack=True,
@@ -655,14 +655,14 @@ def test_evidence_extraction_failure_marks_branch_degraded_and_keeps_raw_citatio
     from app.product_tools import ToolExecutor, ToolPolicy
 
     class Service:
-        def search_candidate_evidence(self, query, candidate_ids, *, context):
+        def search_sku_evidence(self, query, sku_ids, *, context):
             del query, context
             return {
-                "candidate_ids": candidate_ids,
+                "sku_ids": sku_ids,
                 "evidence_packs": [
                     {
                         "schema_version": "2.0",
-                        "candidate_id": "C001",
+                        "sku_id": "C001",
                         "requirements": [
                             {
                                 "requirement_id": "branch_requirement",
@@ -693,7 +693,7 @@ def test_evidence_extraction_failure_marks_branch_degraded_and_keeps_raw_citatio
     result = worker(
         AssessmentWorkItem(
             task_id="C001:1",
-            candidate_id="C001",
+            sku_id="C001",
             dimension_number=1,
             dimension=_dimension(
                 "rag_delivery",
@@ -720,7 +720,7 @@ def test_branch_draft_rejects_removed_parallel_summary_fields():
     with pytest.raises(ValidationError):
         BranchEvidenceDraft(
             task_id="C001:1",
-            candidate_id="C001",
+            sku_id="C001",
             dimension_number=1,
             execution_status="succeeded",
             evidence_refs=["chunk-1"],

@@ -112,7 +112,7 @@ def main() -> None:
         "[dispatch] "
         + json.dumps(
             {
-                "candidates": result["candidate_ids"],
+                "skus": result["sku_ids"],
                 "work_items": len(result["work_items"]),
                 "max_concurrency": args.max_concurrency,
             },
@@ -132,8 +132,8 @@ def main() -> None:
     )
     logger.info(
         "event=verification_completed function=main status=%s "
-        "candidate_count=%s work_item_count=%s status_counts=%s",
-        result["status"], len(result["candidate_ids"]),
+        "sku_count=%s work_item_count=%s status_counts=%s",
+        result["status"], len(result["sku_ids"]),
         len(result["work_items"]), status_counts,
     )
 

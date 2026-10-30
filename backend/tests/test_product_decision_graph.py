@@ -11,22 +11,22 @@ from app.product_decision_graph import (
     build_reducer_demo,
     build_product_decision_graph,
 )
-from scripts.verify_product_decision_graph import _fixture_candidate_provider
+from scripts.verify_product_decision_graph import _fixture_sku_provider
 
 
 def _context() -> DecisionContext:
     return DecisionContext(tenant_id="course-demo", permission_scopes=("hr_private",))
 
 
-def test_fixture_provider_returns_candidates_only_for_ai_request():
+def test_fixture_provider_returns_skus_only_for_ai_request():
     context = _context()
 
-    assert _fixture_candidate_provider({"original_text": "筛选 AI 工程师"}, context) == ["C001", "C004"]
-    assert _fixture_candidate_provider({"original_text": "筛选 Java 工程师"}, context) == []
+    assert _fixture_sku_provider({"original_text": "筛选 AI 工程师"}, context) == ["C001", "C004"]
+    assert _fixture_sku_provider({"original_text": "筛选 Java 工程师"}, context) == []
 
 
 def test_normal_request_reaches_completed_report():
-    graph = build_product_decision_graph(candidate_provider=lambda request, context: ["C001", "C004"])
+    graph = build_product_decision_graph(sku_provider=lambda request, context: ["C001", "C004"])
 
     result = graph.invoke(
         {
@@ -37,28 +37,28 @@ def test_normal_request_reaches_completed_report():
     )
 
     assert result["status"] == "completed"
-    assert result["candidate_ids"] == ["C001", "C004"]
-    assert [item["candidate_id"] for item in result["evaluations"]] == ["C001", "C004"]
+    assert result["sku_ids"] == ["C001", "C004"]
+    assert [item["sku_id"] for item in result["evaluations"]] == ["C001", "C004"]
     assert "C001" in result["report"]
     assert result["errors"] == []
 
 
-def test_empty_candidate_set_uses_explicit_terminal_branch():
-    graph = build_product_decision_graph(candidate_provider=lambda request, context: [])
+def test_empty_sku_set_uses_explicit_terminal_branch():
+    graph = build_product_decision_graph(sku_provider=lambda request, context: [])
 
     result = graph.invoke(
         {"messages": [], "request_text": "筛选 Java 工程师"},
         context=_context(),
     )
 
-    assert result["status"] == "no_candidates"
-    assert result["candidate_ids"] == []
+    assert result["status"] == "no_skus"
+    assert result["sku_ids"] == []
     assert result["evaluations"] == []
     assert result["report"] == "当前条件下未检索到候选商品。"
 
 
 def test_runtime_context_is_required_for_trusted_tenant_data():
-    graph = build_product_decision_graph(candidate_provider=lambda request, context: ["C001"])
+    graph = build_product_decision_graph(sku_provider=lambda request, context: ["C001"])
 
     with pytest.raises(ValueError, match="tenant_id"):
         graph.invoke(

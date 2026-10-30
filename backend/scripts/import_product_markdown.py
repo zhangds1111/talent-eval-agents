@@ -56,14 +56,14 @@ def main() -> None:
         if not match:
             print(f"跳过无法识别的文件名：{path.name}", file=sys.stderr)
             continue
-        candidate_id, kind = match.group(1), match.group(2)
+        sku_id, kind = match.group(1), match.group(2)
         document_type = KIND_TO_DOC_TYPE.get(kind)
         if document_type is None:
             print(f"跳过未知材料类型：{path.name}", file=sys.stderr)
             continue
-        form = {"candidate_id": candidate_id, "title": path.stem, "document_type": document_type}
-        if employees.get(candidate_id):
-            form["employee_id"] = employees[candidate_id]
+        form = {"sku_id": sku_id, "title": path.stem, "document_type": document_type}
+        if employees.get(sku_id):
+            form["employee_id"] = employees[sku_id]
         if knowledge_base_id:
             form["knowledge_base_id"] = knowledge_base_id
         upload = client.post(
@@ -106,7 +106,7 @@ def main() -> None:
             continue
         succeeded += 1
         print(
-            f"{candidate_id}  {path.stem}  chunk={chunk.json()['strategy']}  index={final['index_status']}",
+            f"{sku_id}  {path.stem}  chunk={chunk.json()['strategy']}  index={final['index_status']}",
             flush=True,
         )
     print(f"导入完成：{succeeded}/{len(files)} 份材料")

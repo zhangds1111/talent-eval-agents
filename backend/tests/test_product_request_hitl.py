@@ -8,15 +8,15 @@ from app.product_decision_graph import DecisionContext
 from app.product_request_graph import ProductRequestDraft, build_product_request_graph
 
 
-CANDIDATES = [
+SKUS = [
     {"id": "C001", "region": "上海", "years_of_experience": 6, "age": 29},
     {"id": "C002", "region": "上海", "years_of_experience": 12, "age": 36},
     {"id": "C003", "region": "深圳", "years_of_experience": 8, "age": 33},
 ]
 
 
-def _matches(candidate: dict, condition: FilterCondition) -> bool:
-    value = candidate.get(str(condition.field))
+def _matches(sku: dict, condition: FilterCondition) -> bool:
+    value = sku.get(str(condition.field))
     if value is None:
         return False
     target = condition.value
@@ -35,7 +35,7 @@ def _matches(candidate: dict, condition: FilterCondition) -> bool:
     return False
 
 
-class StubCandidateFilter:
+class StubSkuFilter:
     def __init__(self) -> None:
         self.calls: list[list[dict]] = []
 
@@ -43,7 +43,7 @@ class StubCandidateFilter:
         self.calls.append([item.model_dump(mode="json") for item in filters])
         return [
             item["id"]
-            for item in CANDIDATES
+            for item in SKUS
             if all(_matches(item, condition) for condition in filters)
         ]
 
@@ -97,18 +97,18 @@ def _context() -> DecisionContext:
     return DecisionContext(tenant_id="course-demo", permission_scopes=("hr_private",))
 
 
-def _build(interpreter: HitlInterpreter, candidate_filter: StubCandidateFilter):
+def _build(interpreter: HitlInterpreter, sku_filter: StubSkuFilter):
     return build_product_request_graph(
         request_interpreter=interpreter,
-        candidate_filter=candidate_filter,
+        sku_filter=sku_filter,
         checkpointer=InMemorySaver(),
     )
 
 
-def test_executable_plan_reaches_candidates_ready_without_interrupt():
+def test_executable_plan_reaches_skus_ready_without_interrupt():
     interpreter = HitlInterpreter()
-    candidate_filter = StubCandidateFilter()
-    graph = _build(interpreter, candidate_filter)
+    sku_filter = StubSkuFilter()
+    graph = _build(interpreter, sku_filter)
 
     result = graph.invoke(
         {"request_text": "筛选上海 6 年以上的人才"},
@@ -116,8 +116,8 @@ def test_executable_plan_reaches_candidates_ready_without_interrupt():
         context=_context(),
     )
 
-    assert result["status"] == "candidates_ready"
-    assert result["candidate_ids"] == ["C001", "C002"]
+    assert result["status"] == "skus_ready"
+    assert result["sku_ids"] == ["C001", "C002"]
     assert result["plan_version"] == 0
     assert result["condition_revisions"] == []
     assert "__interrupt__" not in result
@@ -125,8 +125,8 @@ def test_executable_plan_reaches_candidates_ready_without_interrupt():
 
 def test_plan_block_and_empty_result_use_one_free_text_revision_node():
     interpreter = HitlInterpreter()
-    candidate_filter = StubCandidateFilter()
-    graph = _build(interpreter, candidate_filter)
+    sku_filter = StubSkuFilter()
+    graph = _build(interpreter, sku_filter)
 
     blocked_config = {"configurable": {"thread_id": "hitl-unified-blocked"}}
     blocked = graph.invoke(
@@ -144,7 +144,7 @@ def test_plan_block_and_empty_result_use_one_free_text_revision_node():
     empty_payload = empty["__interrupt__"][0].value
     assert graph.get_state(empty_config).next == ("resolve_requirements",)
     assert empty_payload["type"] == "requirement_revision"
-    assert empty_payload["reason_code"] == "empty_candidates"
+    assert empty_payload["reason_code"] == "empty_skus"
     assert "region eq 上海" in empty_payload["blocking_reason"]
     assert "years_of_experience gte 15" in empty_payload["blocking_reason"]
 
@@ -159,15 +159,15 @@ def test_plan_block_and_empty_result_use_one_free_text_revision_node():
         empty_config,
         context=_context(),
     )
-    assert resumed["status"] == "candidates_ready"
+    assert resumed["status"] == "skus_ready"
     final_state = graph.get_state(empty_config).values
     assert final_state["request_text"] == "筛选上海或杭州 5 年以上工作经验的人才"
 
 
 def test_stale_interaction_id_reasks_and_thread_stays_resumable():
     interpreter = HitlInterpreter()
-    candidate_filter = StubCandidateFilter()
-    graph = _build(interpreter, candidate_filter)
+    sku_filter = StubSkuFilter()
+    graph = _build(interpreter, sku_filter)
     config = {"configurable": {"thread_id": "hitl-stale"}}
 
     graph.invoke({"request_text": "筛选上海 15 年以上的人才"}, config, context=_context())
@@ -200,14 +200,14 @@ def test_stale_interaction_id_reasks_and_thread_stays_resumable():
         config,
         context=_context(),
     )
-    assert resumed["status"] == "candidates_ready"
-    assert resumed["candidate_ids"] == ["C001", "C002"]
+    assert resumed["status"] == "skus_ready"
+    assert resumed["sku_ids"] == ["C001", "C002"]
 
 
 def test_empty_revision_text_reasks_with_error():
     interpreter = HitlInterpreter()
-    candidate_filter = StubCandidateFilter()
-    graph = _build(interpreter, candidate_filter)
+    sku_filter = StubSkuFilter()
+    graph = _build(interpreter, sku_filter)
     config = {"configurable": {"thread_id": "hitl-unknown-field"}}
 
     graph.invoke({"request_text": "筛选上海 15 年以上的人才"}, config, context=_context())
@@ -231,8 +231,8 @@ def test_empty_revision_text_reasks_with_error():
 
 def test_cancel_from_resolve_requirements_ends_run():
     interpreter = HitlInterpreter()
-    candidate_filter = StubCandidateFilter()
-    graph = _build(interpreter, candidate_filter)
+    sku_filter = StubSkuFilter()
+    graph = _build(interpreter, sku_filter)
     config = {"configurable": {"thread_id": "hitl-cancel"}}
 
     graph.invoke({"request_text": "年龄条件矛盾的人才"}, config, context=_context())
@@ -243,5 +243,5 @@ def test_cancel_from_resolve_requirements_ends_run():
     )
 
     assert result["status"] == "cancelled"
-    assert result["candidate_ids"] == []
+    assert result["sku_ids"] == []
     assert graph.get_state(config).next == ()

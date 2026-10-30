@@ -59,10 +59,10 @@ def _branch_requirement(
     }
 
 
-def test_aggregate_candidate_keeps_missing_dimension_unscored():
+def test_aggregate_sku_keeps_missing_dimension_unscored():
     from app.product_evaluation_report import (
         DimensionAssessment,
-        aggregate_candidate_assessments,
+        aggregate_sku_assessments,
     )
 
     dimensions = [
@@ -72,7 +72,7 @@ def test_aggregate_candidate_keeps_missing_dimension_unscored():
     assessments = [
         DimensionAssessment(
             task_id="C001:1",
-            candidate_id="C001",
+            sku_id="C001",
             dimension_number=1,
             evidence_status="sufficient",
             score=4,
@@ -84,7 +84,7 @@ def test_aggregate_candidate_keeps_missing_dimension_unscored():
         ),
         DimensionAssessment(
             task_id="C001:2",
-            candidate_id="C001",
+            sku_id="C001",
             dimension_number=2,
             evidence_status="missing",
             score=None,
@@ -96,7 +96,7 @@ def test_aggregate_candidate_keeps_missing_dimension_unscored():
         ),
     ]
 
-    result = aggregate_candidate_assessments(dimensions, assessments)
+    result = aggregate_sku_assessments(dimensions, assessments)
 
     assert result[0].confirmed_score == 48.0
     assert result[0].possible_score == 88.0
@@ -116,7 +116,7 @@ def test_validate_dimension_judgement_rejects_unavailable_evidence_ref():
 
     branch = BranchEvidenceDraft(
         task_id="C001:1",
-        candidate_id="C001",
+        sku_id="C001",
         dimension_number=1,
         execution_status="succeeded",
         requirements=[_branch_requirement("E1")],
@@ -146,7 +146,7 @@ def test_validate_dimension_judgement_rejects_score_for_missing_evidence():
 
     branch = BranchEvidenceDraft(
         task_id="C001:2",
-        candidate_id="C001",
+        sku_id="C001",
         dimension_number=2,
         execution_status="succeeded",
         requirements=[
@@ -167,7 +167,7 @@ def test_validate_dimension_judgement_rejects_score_for_missing_evidence():
         validate_dimension_judgement(branch, judgement)
 
 
-def test_receive_input_rejects_incomplete_candidate_dimension_matrix():
+def test_receive_input_rejects_incomplete_sku_dimension_matrix():
     import pytest
 
     from app.product_evaluation_report import _receive_input
@@ -179,7 +179,7 @@ def test_receive_input_rejects_incomplete_candidate_dimension_matrix():
     branch_results = [
         {
             "task_id": "C001:1",
-            "candidate_id": "C001",
+            "sku_id": "C001",
             "dimension_number": 1,
             "execution_status": "succeeded",
             "requirements": [
@@ -201,7 +201,7 @@ def test_receive_input_rejects_incomplete_candidate_dimension_matrix():
 
 def test_report_graph_scores_aggregates_ranks_and_renders_trusted_citations():
     from app.product_evaluation_report import (
-        CandidateReportDraft,
+        SkuReportDraft,
         ConsistencyIssue,
         ConsistencyReview,
         DimensionJudgement,
@@ -248,7 +248,7 @@ def test_report_graph_scores_aggregates_ranks_and_renders_trusted_citations():
     branch_results = [
         {
             "task_id": "C001:1",
-            "candidate_id": "C001",
+            "sku_id": "C001",
             "dimension_number": 1,
             "execution_status": "succeeded",
             "requirements": [
@@ -258,7 +258,7 @@ def test_report_graph_scores_aggregates_ranks_and_renders_trusted_citations():
         },
         {
             "task_id": "C001:2",
-            "candidate_id": "C001",
+            "sku_id": "C001",
             "dimension_number": 2,
             "execution_status": "succeeded",
             "requirements": [
@@ -273,7 +273,7 @@ def test_report_graph_scores_aggregates_ranks_and_renders_trusted_citations():
         },
         {
             "task_id": "C002:1",
-            "candidate_id": "C002",
+            "sku_id": "C002",
             "dimension_number": 1,
             "execution_status": "succeeded",
             "requirements": [
@@ -288,7 +288,7 @@ def test_report_graph_scores_aggregates_ranks_and_renders_trusted_citations():
         },
         {
             "task_id": "C002:2",
-            "candidate_id": "C002",
+            "sku_id": "C002",
             "dimension_number": 2,
             "execution_status": "failed",
             "requirements": [],
@@ -331,24 +331,24 @@ def test_report_graph_scores_aggregates_ranks_and_renders_trusted_citations():
         assert {item.ref_id for item in evidence} == set(branch_evidence_refs(branch))
         return scores[branch.task_id]
 
-    def report_writer(candidates, evidence):
-        assert [item.candidate_id for item in candidates] == ["C001", "C002"]
-        assert candidates[0].consistency_issues[0].dimension_numbers == [
+    def report_writer(skus, evidence):
+        assert [item.sku_id for item in skus] == ["C001", "C002"]
+        assert skus[0].consistency_issues[0].dimension_numbers == [
             1,
             2,
         ]
         return ReportDraft(
             title="人才评估与推荐报告",
             overview="C001 已确认匹配度较高",
-            candidates=[
-                CandidateReportDraft(
-                    candidate_id="C001",
+            skus=[
+                SkuReportDraft(
+                    sku_id="C001",
                     summary="RAG 交付经验完整",
                     highlights=[ReportPoint(text="主导 RAG 项目上线", evidence_refs=["chunk-1"])],
                     risks=["需补充 Agent 回归记录"],
                 ),
-                CandidateReportDraft(
-                    candidate_id="C002",
+                SkuReportDraft(
+                    sku_id="C002",
                     summary="当前材料覆盖不足",
                     highlights=[ReportPoint(text="参与 RAG 模块开发", evidence_refs=["chunk-3"])],
                     risks=["Agent 评测分支执行失败"],
@@ -358,12 +358,12 @@ def test_report_graph_scores_aggregates_ranks_and_renders_trusted_citations():
 
     def consistency_reviewer(assessments, evidence):
         assert len(assessments) == 2
-        if assessments[0].candidate_id == "C002":
+        if assessments[0].sku_id == "C002":
             return ConsistencyReview()
         return ConsistencyReview(
             issues=[
                 ConsistencyIssue(
-                    candidate_id="C001",
+                    sku_id="C001",
                     dimension_numbers=[1, 2],
                     evidence_refs=["chunk-1", "chunk-2"],
                     message="项目时间范围需要进一步核对",
@@ -389,20 +389,20 @@ def test_report_graph_scores_aggregates_ranks_and_renders_trusted_citations():
         "C002:1",
     }
     assert result["ranking"] == ["C001", "C002"]
-    assert result["candidate_assessments"][0]["confirmed_score"] == 84.0
-    assert result["candidate_assessments"][0]["confidence"] == "low"
-    assert result["candidate_assessments"][1]["confirmed_score"] == 36.0
-    assert result["candidate_assessments"][1]["dimensions"][1]["evidence_status"] == "failed"
+    assert result["sku_assessments"][0]["confirmed_score"] == 84.0
+    assert result["sku_assessments"][0]["confidence"] == "low"
+    assert result["sku_assessments"][1]["confirmed_score"] == 36.0
+    assert result["sku_assessments"][1]["dimensions"][1]["evidence_status"] == "failed"
     assert "[E1](/api/evidence/citations/chunk-1?quote_start=0&quote_end=14)" in result["report"]
     assert result["status"] == "completed"
 
 
-def test_validate_report_draft_rejects_evidence_from_another_candidate():
+def test_validate_report_draft_rejects_evidence_from_another_sku():
     import pytest
 
     from app.product_evaluation_report import (
-        CandidateAssessment,
-        CandidateReportDraft,
+        SkuAssessment,
+        SkuReportDraft,
         DimensionAssessment,
         EvidenceItem,
         ReportDraft,
@@ -410,9 +410,9 @@ def test_validate_report_draft_rejects_evidence_from_another_candidate():
         validate_report_draft,
     )
 
-    candidates = [
-        CandidateAssessment(
-            candidate_id="C001",
+    skus = [
+        SkuAssessment(
+            sku_id="C001",
             confirmed_score=100,
             possible_score=100,
             evidence_coverage_percent=100,
@@ -420,7 +420,7 @@ def test_validate_report_draft_rejects_evidence_from_another_candidate():
             dimensions=[
                 DimensionAssessment(
                     task_id="C001:1",
-                    candidate_id="C001",
+                    sku_id="C001",
                     dimension_number=1,
                     evidence_status="sufficient",
                     score=5,
@@ -434,7 +434,7 @@ def test_validate_report_draft_rejects_evidence_from_another_candidate():
     evidence_items = [
         EvidenceItem(
             ref_id="E1",
-            candidate_id="C002",
+            sku_id="C002",
             quote="其他候选人证据",
             source_label="简历",
             citation_url="/api/evidence/citations/chunk-2",
@@ -443,9 +443,9 @@ def test_validate_report_draft_rejects_evidence_from_another_candidate():
     draft = ReportDraft(
         title="报告",
         overview="评估结果",
-        candidates=[
-            CandidateReportDraft(
-                candidate_id="C001",
+        skus=[
+            SkuReportDraft(
+                sku_id="C001",
                 summary="综合表现良好",
                 highlights=[ReportPoint(text="RAG 经验完整", evidence_refs=["E1"])],
             )
@@ -453,7 +453,7 @@ def test_validate_report_draft_rejects_evidence_from_another_candidate():
     )
 
     with pytest.raises(ValueError, match="E1"):
-        validate_report_draft(draft, candidates, evidence_items)
+        validate_report_draft(draft, skus, evidence_items)
 
 
 def test_structured_dimension_scorer_uses_anchors_and_evidence_without_counter_fields():
@@ -490,7 +490,7 @@ def test_structured_dimension_scorer_uses_anchors_and_evidence_without_counter_f
         _dimension("rag_delivery", 100),
         BranchEvidenceDraft(
             task_id="C001:1",
-            candidate_id="C001",
+            sku_id="C001",
             dimension_number=1,
             execution_status="succeeded",
             requirements=[_branch_requirement("E1")],
@@ -498,7 +498,7 @@ def test_structured_dimension_scorer_uses_anchors_and_evidence_without_counter_f
         [
             EvidenceItem(
                 ref_id="E1",
-                candidate_id="C001",
+                sku_id="C001",
                 quote="主导 RAG 项目并完成上线",
                 source_label="项目复盘",
                 citation_url="/api/evidence/citations/chunk-1",
@@ -545,7 +545,7 @@ def test_structured_dimension_scorer_uses_short_evidence_refs_and_restores_chunk
         _dimension("rag_delivery", 100),
         BranchEvidenceDraft(
             task_id="C001:1",
-            candidate_id="C001",
+            sku_id="C001",
             dimension_number=1,
             execution_status="succeeded",
             requirements=[_branch_requirement(chunk_id)],
@@ -554,7 +554,7 @@ def test_structured_dimension_scorer_uses_short_evidence_refs_and_restores_chunk
             EvidenceItem(
                 ref_id=chunk_id,
                 model_ref="E1",
-                candidate_id="C001",
+                sku_id="C001",
                 quote="主导 RAG 项目并完成上线",
                 source_label="项目复盘",
                 citation_url=f"/api/evidence/citations/{chunk_id}",
@@ -569,8 +569,8 @@ def test_structured_dimension_scorer_uses_short_evidence_refs_and_restores_chunk
 
 def test_structured_report_writer_receives_ranked_assessments_and_verified_evidence():
     from app.product_evaluation_report import (
-        CandidateAssessment,
-        CandidateReportDraft,
+        SkuAssessment,
+        SkuReportDraft,
         DimensionAssessment,
         EvidenceItem,
         ReportDraft,
@@ -581,9 +581,9 @@ def test_structured_report_writer_receives_ranked_assessments_and_verified_evide
     expected = ReportDraft(
         title="人才评估与推荐报告",
         overview="C001 的已确认得分较高",
-        candidates=[
-            CandidateReportDraft(
-                candidate_id="C001",
+        skus=[
+            SkuReportDraft(
+                sku_id="C001",
                 summary="RAG 交付证据完整",
                 highlights=[ReportPoint(text="主导 RAG 上线", evidence_refs=["E1"])],
                 risks=[],
@@ -607,8 +607,8 @@ def test_structured_report_writer_receives_ranked_assessments_and_verified_evide
     writer = build_structured_report_writer(lambda: model)
     draft = writer(
         [
-            CandidateAssessment(
-                candidate_id="C001",
+            SkuAssessment(
+                sku_id="C001",
                 confirmed_score=100,
                 possible_score=100,
                 evidence_coverage_percent=100,
@@ -616,7 +616,7 @@ def test_structured_report_writer_receives_ranked_assessments_and_verified_evide
                 dimensions=[
                     DimensionAssessment(
                         task_id="C001:1",
-                        candidate_id="C001",
+                        sku_id="C001",
                         dimension_number=1,
                         evidence_status="sufficient",
                         score=5,
@@ -630,7 +630,7 @@ def test_structured_report_writer_receives_ranked_assessments_and_verified_evide
         [
             EvidenceItem(
                 ref_id="E1",
-                candidate_id="C001",
+                sku_id="C001",
                 quote="主导 RAG 项目并完成上线",
                 source_label="项目复盘",
                 citation_url="/api/evidence/citations/chunk-1",
@@ -660,7 +660,7 @@ def test_report_writer_retries_schema_validation_once(invalid_attempts):
                 assert "校验" in messages[-1][1]
             return ReportDraft.model_validate({
                 "title": "评估报告", "overview": "结果概述",
-                "candidates": [{"candidate_id": "C001", "summary": "证据摘要",
+                "skus": [{"sku_id": "C001", "summary": "证据摘要",
                     "highlights": [{"text": "匹配依据", "evidence_refs": [f"E{i}" for i in range(9)]}] if self.calls <= invalid_attempts else []}],
             })
 
@@ -676,8 +676,8 @@ def test_report_writer_retries_schema_validation_once(invalid_attempts):
 
 def test_structured_report_writer_restores_short_refs_before_validation():
     from app.product_evaluation_report import (
-        CandidateAssessment,
-        CandidateReportDraft,
+        SkuAssessment,
+        SkuReportDraft,
         DimensionAssessment,
         EvidenceItem,
         ReportDraft,
@@ -700,9 +700,9 @@ def test_structured_report_writer_restores_short_refs_before_validation():
             return ReportDraft(
                 title="人才评估报告",
                 overview="候选人具备完整交付证据",
-                candidates=[
-                    CandidateReportDraft(
-                        candidate_id="C001",
+                skus=[
+                    SkuReportDraft(
+                        sku_id="C001",
                         summary="RAG 交付证据完整",
                         highlights=[
                             ReportPoint(text="主导项目上线", evidence_refs=["E1"])
@@ -711,8 +711,8 @@ def test_structured_report_writer_restores_short_refs_before_validation():
                 ],
             )
 
-    candidate = CandidateAssessment(
-        candidate_id="C001",
+    sku = SkuAssessment(
+        sku_id="C001",
         confirmed_score=100,
         possible_score=100,
         evidence_coverage_percent=100,
@@ -720,7 +720,7 @@ def test_structured_report_writer_restores_short_refs_before_validation():
         dimensions=[
             DimensionAssessment(
                 task_id="C001:1",
-                candidate_id="C001",
+                sku_id="C001",
                 dimension_number=1,
                 evidence_status="sufficient",
                 score=5,
@@ -733,23 +733,23 @@ def test_structured_report_writer_restores_short_refs_before_validation():
     evidence = EvidenceItem(
         ref_id=chunk_id,
         model_ref="E1",
-        candidate_id="C001",
+        sku_id="C001",
         quote="主导 RAG 项目并完成上线",
         source_label="项目复盘",
         citation_url=f"/api/evidence/citations/{chunk_id}",
     )
     model = StructuredModel()
 
-    draft = build_structured_report_writer(lambda: model)([candidate], [evidence])
+    draft = build_structured_report_writer(lambda: model)([sku], [evidence])
 
-    assert draft.candidates[0].highlights[0].evidence_refs == [chunk_id]
+    assert draft.skus[0].highlights[0].evidence_refs == [chunk_id]
     assert chunk_id not in model.messages[1][1]
     assert '"ref_id": "E1"' in model.messages[1][1]
 
 
 def test_structured_output_models_describe_every_model_generated_field():
     from app.product_evaluation_report import (
-        CandidateReportDraft,
+        SkuReportDraft,
         ConsistencyIssue,
         ConsistencyReview,
         DimensionJudgement,
@@ -762,7 +762,7 @@ def test_structured_output_models_describe_every_model_generated_field():
         ConsistencyIssue,
         ConsistencyReview,
         ReportPoint,
-        CandidateReportDraft,
+        SkuReportDraft,
         ReportDraft,
     ):
         properties = schema.model_json_schema()["properties"]
@@ -773,7 +773,7 @@ def test_consistency_issue_lowers_confidence_without_rewriting_scores():
     from app.product_evaluation_report import (
         ConsistencyIssue,
         DimensionAssessment,
-        aggregate_candidate_assessments,
+        aggregate_sku_assessments,
     )
 
     dimensions = [
@@ -783,7 +783,7 @@ def test_consistency_issue_lowers_confidence_without_rewriting_scores():
     assessments = [
         DimensionAssessment(
             task_id="C001:1",
-            candidate_id="C001",
+            sku_id="C001",
             dimension_number=1,
             evidence_status="sufficient",
             score=5,
@@ -793,7 +793,7 @@ def test_consistency_issue_lowers_confidence_without_rewriting_scores():
         ),
         DimensionAssessment(
             task_id="C001:2",
-            candidate_id="C001",
+            sku_id="C001",
             dimension_number=2,
             evidence_status="sufficient",
             score=5,
@@ -803,13 +803,13 @@ def test_consistency_issue_lowers_confidence_without_rewriting_scores():
         ),
     ]
     issue = ConsistencyIssue(
-        candidate_id="C001",
+        sku_id="C001",
         dimension_numbers=[1, 2],
         evidence_refs=["E1", "E2"],
         message="两份材料对主导职责的描述不一致",
     )
 
-    result = aggregate_candidate_assessments(dimensions, assessments, [issue])
+    result = aggregate_sku_assessments(dimensions, assessments, [issue])
 
     assert result[0].confirmed_score == 100.0
     assert result[0].possible_score == 100.0
@@ -829,7 +829,7 @@ def test_structured_consistency_reviewer_uses_only_scored_evidence():
     expected = ConsistencyReview(
         issues=[
             ConsistencyIssue(
-                candidate_id="C001",
+                sku_id="C001",
                 dimension_numbers=[1, 2],
                 evidence_refs=["E1", "E2"],
                 message="两个维度对项目主导职责的描述不一致",
@@ -854,7 +854,7 @@ def test_structured_consistency_reviewer_uses_only_scored_evidence():
     assessments = [
         DimensionAssessment(
             task_id="C001:1",
-            candidate_id="C001",
+            sku_id="C001",
             dimension_number=1,
             evidence_status="sufficient",
             score=5,
@@ -864,7 +864,7 @@ def test_structured_consistency_reviewer_uses_only_scored_evidence():
         ),
         DimensionAssessment(
             task_id="C001:2",
-            candidate_id="C001",
+            sku_id="C001",
             dimension_number=2,
             evidence_status="sufficient",
             score=5,
@@ -876,14 +876,14 @@ def test_structured_consistency_reviewer_uses_only_scored_evidence():
     evidence = [
         EvidenceItem(
             ref_id="E1",
-            candidate_id="C001",
+            sku_id="C001",
             quote="候选人主导 RAG 方案",
             source_label="项目复盘",
             citation_url="/api/evidence/citations/chunk-1",
         ),
         EvidenceItem(
             ref_id="E2",
-            candidate_id="C001",
+            sku_id="C001",
             quote="候选人作为参与者配合交付",
             source_label="面试记录",
             citation_url="/api/evidence/citations/chunk-2",
@@ -924,7 +924,7 @@ def test_structured_consistency_reviewer_restores_short_refs():
             return ConsistencyReview(
                 issues=[
                     ConsistencyIssue(
-                        candidate_id="C001",
+                        sku_id="C001",
                         dimension_numbers=[1, 2],
                         evidence_refs=["E1", "E2"],
                         message="职责描述不一致",
@@ -935,7 +935,7 @@ def test_structured_consistency_reviewer_restores_short_refs():
     assessments = [
         DimensionAssessment(
             task_id=f"C001:{number}",
-            candidate_id="C001",
+            sku_id="C001",
             dimension_number=number,
             evidence_status="sufficient",
             score=5,
@@ -949,7 +949,7 @@ def test_structured_consistency_reviewer_restores_short_refs():
         EvidenceItem(
             ref_id=chunk_id,
             model_ref=f"E{number}",
-            candidate_id="C001",
+            sku_id="C001",
             quote="项目职责描述",
             source_label="项目材料",
             citation_url=f"/api/evidence/citations/{chunk_id}",
@@ -993,19 +993,19 @@ def test_score_dimensions_runs_twelve_model_calls_concurrently():
             evidence_status="sufficient",
             score=5,
             confidence="high",
-            evidence_refs=[f"chunk-{branch.candidate_id}"],
+            evidence_refs=[f"chunk-{branch.sku_id}"],
             rationale="存在完整交付证据",
         )
 
     branch_results = []
     evidence_items = []
     for number in range(12):
-        candidate_id = f"C{number:03d}"
-        chunk_id = f"chunk-{candidate_id}"
+        sku_id = f"C{number:03d}"
+        chunk_id = f"chunk-{sku_id}"
         branch_results.append(
             {
-                "task_id": f"{candidate_id}:1",
-                "candidate_id": candidate_id,
+                "task_id": f"{sku_id}:1",
+                "sku_id": sku_id,
                 "dimension_number": 1,
                 "execution_status": "succeeded",
                 "requirements": [_branch_requirement(chunk_id)],
@@ -1015,7 +1015,7 @@ def test_score_dimensions_runs_twelve_model_calls_concurrently():
             {
                 "ref_id": chunk_id,
                 "model_ref": f"E{number + 1}",
-                "candidate_id": candidate_id,
+                "sku_id": sku_id,
                 "quote": "主导项目上线",
                 "source_label": "项目复盘",
                 "citation_url": f"/api/evidence/citations/{chunk_id}",
@@ -1036,7 +1036,7 @@ def test_score_dimensions_runs_twelve_model_calls_concurrently():
     ]
 
 
-def test_consistency_review_runs_once_per_candidate_concurrently():
+def test_consistency_review_runs_once_per_sku_concurrently():
     import threading
     import time
 
@@ -1047,15 +1047,15 @@ def test_consistency_review_runs_once_per_candidate_concurrently():
 
     active = 0
     max_active = 0
-    reviewed_candidates = []
+    reviewed_skus = []
     lock = threading.Lock()
 
     def reviewer(assessments, evidence_items):
         nonlocal active, max_active
         del evidence_items
-        candidate_ids = {item.candidate_id for item in assessments}
+        sku_ids = {item.sku_id for item in assessments}
         with lock:
-            reviewed_candidates.append(candidate_ids)
+            reviewed_skus.append(sku_ids)
             active += 1
             max_active = max(max_active, active)
         time.sleep(0.1)
@@ -1064,12 +1064,12 @@ def test_consistency_review_runs_once_per_candidate_concurrently():
         return ConsistencyReview()
 
     assessments = []
-    for candidate_id in ("C001", "C002"):
+    for sku_id in ("C001", "C002"):
         for dimension_number in (1, 2):
             assessments.append(
                 {
-                    "task_id": f"{candidate_id}:{dimension_number}",
-                    "candidate_id": candidate_id,
+                    "task_id": f"{sku_id}:{dimension_number}",
+                    "sku_id": sku_id,
                     "dimension_number": dimension_number,
                     "evidence_status": "missing",
                     "score": None,
@@ -1089,7 +1089,7 @@ def test_consistency_review_runs_once_per_candidate_concurrently():
     )
 
     assert max_active == 2
-    assert {frozenset(item) for item in reviewed_candidates} == {
+    assert {frozenset(item) for item in reviewed_skus} == {
         frozenset({"C001"}),
         frozenset({"C002"}),
     }
@@ -1124,7 +1124,7 @@ def test_verify_script_reuses_report_runtime_graph_and_dispatch_output(
             {
                 "dimensions": [{"name": "RAG", "weight_percent": 100}],
                 "branch_results": [{"task_id": "C001:1"}],
-                "candidate_ids": ["C001"],
+                "sku_ids": ["C001"],
             },
             ensure_ascii=False,
         ),
@@ -1217,7 +1217,7 @@ def test_langgraph_config_registers_report_runtime_graph():
 
 def test_report_graph_derives_evidence_items_and_missing_information_from_branch_packs():
     from app.product_evaluation_report import (
-        CandidateReportDraft,
+        SkuReportDraft,
         DimensionJudgement,
         ReportDraft,
         ReportPoint,
@@ -1228,7 +1228,7 @@ def test_report_graph_derives_evidence_items_and_missing_information_from_branch
     branch_results = [
         {
             "task_id": "C001:1",
-            "candidate_id": "C001",
+            "sku_id": "C001",
             "dimension_number": 1,
             "execution_status": "succeeded",
             "requirements": [
@@ -1278,15 +1278,15 @@ def test_report_graph_derives_evidence_items_and_missing_information_from_branch
             rationale="已有项目职责事实",
         )
 
-    def writer(candidates, evidence_items):
-        assert candidates[0].dimensions[0].missing_items == ["缺少量化结果"]
+    def writer(skus, evidence_items):
+        assert skus[0].dimensions[0].missing_items == ["缺少量化结果"]
         assert [item.ref_id for item in evidence_items] == ["chunk-1"]
         return ReportDraft(
             title="人才评估报告",
             overview="C001 有部分可验证证据",
-            candidates=[
-                CandidateReportDraft(
-                    candidate_id="C001",
+            skus=[
+                SkuReportDraft(
+                    sku_id="C001",
                     summary="存在 RAG 项目事实",
                     highlights=[
                         ReportPoint(text="主导 RAG 方案上线", evidence_refs=["chunk-1"])
@@ -1314,7 +1314,7 @@ def test_report_graph_derives_evidence_items_and_missing_information_from_branch
 @pytest.mark.parametrize("bad_attempts, expected_status", [(1, "partial"), (2, "failed")])
 def test_invalid_dimension_judgement_is_retried_then_marked_failed(bad_attempts, expected_status):
     from app.product_evaluation_report import (
-        CandidateReportDraft,
+        SkuReportDraft,
         DimensionJudgement,
         ReportDraft,
         build_product_evaluation_report_graph,
@@ -1331,22 +1331,22 @@ def test_invalid_dimension_judgement_is_retried_then_marked_failed(bad_attempts,
         return DimensionJudgement(evidence_status="partial", score=3, confidence="medium",
                                   evidence_refs=["chunk-1"], rationale="已有事实")
 
-    def report_writer(candidates, evidence):
-        return ReportDraft(title="选品报告", overview="概述", candidates=[
-            CandidateReportDraft(candidate_id="SKU-1", summary="摘要", highlights=[], risks=[]),
+    def report_writer(skus, evidence):
+        return ReportDraft(title="选品报告", overview="概述", skus=[
+            SkuReportDraft(sku_id="SKU-1", summary="摘要", highlights=[], risks=[]),
         ])
 
     graph = build_product_evaluation_report_graph(dimension_scorer=scorer, report_writer=report_writer)
     result = graph.invoke({
         "dimensions": [_dimension("认证证据", 100).model_dump(mode="json")],
         "branch_results": [{
-            "task_id": "SKU-1:1", "candidate_id": "SKU-1", "dimension_number": 1,
+            "task_id": "SKU-1:1", "sku_id": "SKU-1", "dimension_number": 1,
             "execution_status": "succeeded", "requirements": [_branch_requirement("chunk-1")],
             "tool_call_ids": ["T1"],
         }],
     })
 
     assert result["status"] == "completed"
-    dimension = result["candidate_assessments"][0]["dimensions"][0]
+    dimension = result["sku_assessments"][0]["dimensions"][0]
     assert dimension["evidence_status"] == expected_status
     assert len(calls) == 2

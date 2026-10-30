@@ -20,12 +20,12 @@ class MemoryRows:
 def fixture():
     db = MemoryRows()
     kb = db.add(KnowledgeBase, tenant_id='t1', status='active', permission_scope='hr_private')
-    doc = db.add(Document, tenant_id='t1', candidate_id='C001', permission_scope='hr_private',
+    doc = db.add(Document, tenant_id='t1', sku_id='C001', permission_scope='hr_private',
         status='active', title='项目复盘', knowledge_base_id=kb.id)
     version = db.add(DocumentVersion, document_id=doc.id, is_current=True, version_no=1)
     job = db.add(ParseJob, parser_version='v1')
     run = db.add(ChunkingRun, parse_job_id=job.id)
-    chunk = db.add(DocumentChunk, document_version_id=version.id, candidate_id='C001',
+    chunk = db.add(DocumentChunk, document_version_id=version.id, sku_id='C001',
         permission_scope='hr_private', chunking_run_id=run.id, content='负责星河项目。',
         heading_path=['职责'], markdown_start=10, markdown_end=17,
         source_locators=[], page_start=None, page_end=None, timestamp_start=None,
@@ -50,7 +50,7 @@ def test_citation_binds_original_version_and_markdown_offsets():
     assert result['content'] == chunk.content
 
 
-@pytest.mark.parametrize('change', ['tenant', 'document_scope', 'kb_scope', 'deleted', 'missing', 'candidate'])
+@pytest.mark.parametrize('change', ['tenant', 'document_scope', 'kb_scope', 'deleted', 'missing', 'sku'])
 def test_citation_rechecks_current_access_without_leaking_existence(change):
     db, kb, doc, version, chunk = fixture()
     if change == 'tenant': doc.tenant_id = 'other'
@@ -58,7 +58,7 @@ def test_citation_rechecks_current_access_without_leaking_existence(change):
     if change == 'kb_scope': kb.permission_scope = 'restricted'
     if change == 'deleted': doc.status = 'deleted'
     if change == 'missing': del db.rows[Document, doc.id]
-    if change == 'candidate': chunk.candidate_id = 'C002'
+    if change == 'sku': chunk.sku_id = 'C002'
     with pytest.raises(HTTPException) as error:
         resolve(db, chunk)
     assert error.value.status_code == 404
@@ -129,7 +129,7 @@ def test_citation_endpoint_rejects_invalid_quote_offsets(query):
 def test_pack_sources_reload_text_and_skip_stale_or_revoked_hits():
     from app.evidence_citations import load_pack_sources
     db, kb, doc, version, chunk = fixture()
-    hit = {'chunk_id': str(chunk.id), 'candidate_id': 'C001', 'content': '不可信索引文本', 'requirement_ids': ['S1']}
+    hit = {'chunk_id': str(chunk.id), 'sku_id': 'C001', 'content': '不可信索引文本', 'requirement_ids': ['S1']}
     args = dict(tenant_id='t1', permission_scopes=['hr_private'])
     result = load_pack_sources(db, [hit], **args)
     assert result[0]['content'] == '负责星河项目。'

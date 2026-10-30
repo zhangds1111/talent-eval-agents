@@ -22,7 +22,7 @@ class StreamingState(TypedDict, total=False):
     request_text: str
     selected_job: str
     status: str
-    candidate_ids: list[str]
+    sku_ids: list[str]
     dimensions: list[dict[str, Any]]
     work_items: list[dict[str, Any]]
     branch_results: list[dict[str, Any]]
@@ -51,8 +51,8 @@ def _streaming_graph(*, require_revision: bool = False, slow: bool = False):
         )
         return {"revision_text": decision["revision_text"]}
 
-    def filter_candidates(_: StreamingState) -> dict[str, Any]:
-        return {"candidate_ids": ["C001"], "status": "candidates_ready"}
+    def filter_skus(_: StreamingState) -> dict[str, Any]:
+        return {"sku_ids": ["C001"], "status": "skus_ready"}
 
     def generate_dimensions(_: StreamingState) -> dict[str, Any]:
         return {"dimensions": [{"name": "RAG 落地"}], "status": "dimensions_generated"}
@@ -75,7 +75,7 @@ def _streaming_graph(*, require_revision: bool = False, slow: bool = False):
             "evidence_items": [
                 {
                     "model_ref": "E1",
-                    "candidate_id": "C001",
+                    "sku_id": "C001",
                     "source_label": "C001_项目复盘",
                     "quote": "完成企业知识库检索质量评测",
                     "citation_url": "/api/evidence/citations/chunk-1",
@@ -83,8 +83,8 @@ def _streaming_graph(*, require_revision: bool = False, slow: bool = False):
             ]
         }
 
-    def aggregate_candidates(_: StreamingState) -> dict[str, Any]:
-        return {"ranking": ["C001"], "status": "candidates_ranked"}
+    def aggregate_skus(_: StreamingState) -> dict[str, Any]:
+        return {"ranking": ["C001"], "status": "skus_ranked"}
 
     def validate_report(state: StreamingState) -> dict[str, Any]:
         return {
@@ -95,25 +95,25 @@ def _streaming_graph(*, require_revision: bool = False, slow: bool = False):
     builder.add_node("interpret_input", interpret_input)
     if require_revision:
         builder.add_node("resolve_requirements", resolve_requirements)
-    builder.add_node("filter_candidates", filter_candidates)
+    builder.add_node("filter_skus", filter_skus)
     builder.add_node("generate_dimensions", generate_dimensions)
     builder.add_node("prepare_work_items", prepare_work_items)
     builder.add_node("run_assessment_branch", run_assessment_branch)
     builder.add_node("receive_input", receive_input)
-    builder.add_node("aggregate_candidates", aggregate_candidates)
+    builder.add_node("aggregate_skus", aggregate_skus)
     builder.add_node("validate_report", validate_report)
     builder.add_edge(START, "interpret_input")
     if require_revision:
         builder.add_edge("interpret_input", "resolve_requirements")
-        builder.add_edge("resolve_requirements", "filter_candidates")
+        builder.add_edge("resolve_requirements", "filter_skus")
     else:
-        builder.add_edge("interpret_input", "filter_candidates")
-    builder.add_edge("filter_candidates", "generate_dimensions")
+        builder.add_edge("interpret_input", "filter_skus")
+    builder.add_edge("filter_skus", "generate_dimensions")
     builder.add_edge("generate_dimensions", "prepare_work_items")
     builder.add_edge("prepare_work_items", "run_assessment_branch")
     builder.add_edge("run_assessment_branch", "receive_input")
-    builder.add_edge("receive_input", "aggregate_candidates")
-    builder.add_edge("aggregate_candidates", "validate_report")
+    builder.add_edge("receive_input", "aggregate_skus")
+    builder.add_edge("aggregate_skus", "validate_report")
     builder.add_edge("validate_report", END)
     return builder.compile(checkpointer=InMemorySaver())
 
@@ -189,7 +189,7 @@ async def test_run_projects_compiled_graph_output_instead_of_fixture_report():
     assert report.data["citations"] == [
         {
             "ref": "E1",
-            "candidate": "C001",
+            "sku": "C001",
             "document": "C001_项目复盘",
             "quote": "完成企业知识库检索质量评测",
             "url": "/api/evidence/citations/chunk-1",

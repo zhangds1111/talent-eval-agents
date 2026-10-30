@@ -72,7 +72,7 @@ def test_product_without_attributes_has_no_fabricated_facts(session_factory):
 
 
 def test_gross_margin_filter_is_sql_computed(session_factory):
-    from app.query_plan import FilterCondition, QueryPlan, TaskType, select_candidate_ids
+    from app.query_plan import FilterCondition, QueryPlan, TaskType, select_sku_ids
 
     plan = QueryPlan(
         task_type=TaskType.FIND_PRODUCT,
@@ -83,7 +83,7 @@ def test_gross_margin_filter_is_sql_computed(session_factory):
         ],
     )
     with session_factory() as db:
-        ids = select_candidate_ids(db, plan, tenant_id="course-demo")
+        ids = select_sku_ids(db, plan, tenant_id="course-demo")
     assert ids == ["SKU-CL-001"]  # SKU-CL-002 毛利 33.8% 被 SQL 排除
 
 
@@ -97,35 +97,35 @@ def test_price_filter_rejects_non_numeric_operator():
 
 def test_ranking_puts_certification_gaps_after_and_report_renders_program_facts():
     from app.product_compliance import CertificationCheck, ProductFacts
-    from app.product_evaluation_report import CandidateAssessment, _render_product_facts, rank_candidate_assessments
+    from app.product_evaluation_report import SkuAssessment, _render_product_facts, rank_sku_assessments
 
-    def candidate(cid, score, statuses):
+    def sku(cid, score, statuses):
         facts = ProductFacts(
-            candidate_id=cid,
+            sku_id=cid,
             unit_economics=compute_unit_economics(currency="USD", target_price=20, landed_cost=11),
             certification_checks=[
                 CertificationCheck(certification=f"C{i}", rationale="r", status=st, detail="d")
                 for i, st in enumerate(statuses)
             ],
         )
-        return CandidateAssessment(candidate_id=cid, confirmed_score=score, possible_score=score,
+        return SkuAssessment(sku_id=cid, confirmed_score=score, possible_score=score,
                                    evidence_coverage_percent=100, confidence="high", dimensions=[], product_facts=facts)
 
-    high_but_gap = candidate("A", 90, ["evidenced", "expired"])
-    lower_clean = candidate("B", 60, ["evidenced"])
-    unknown = CandidateAssessment(candidate_id="C", confirmed_score=70, possible_score=70,
+    high_but_gap = sku("A", 90, ["evidenced", "expired"])
+    lower_clean = sku("B", 60, ["evidenced"])
+    unknown = SkuAssessment(sku_id="C", confirmed_score=70, possible_score=70,
                                   evidence_coverage_percent=100, confidence="high", dimensions=[])
-    assert [c.candidate_id for c in rank_candidate_assessments([high_but_gap, lower_clean, unknown])] == ["C", "B", "A"]
+    assert [c.sku_id for c in rank_sku_assessments([high_but_gap, lower_clean, unknown])] == ["C", "B", "A"]
     text = "\n".join(_render_product_facts(high_but_gap.product_facts))
     assert "毛利率 **45.0%**" in text and "缺有效证据：已过期" in text
 
 
 def test_market_aliases_are_normalized_before_sql(session_factory):
-    from app.query_plan import FilterCondition, QueryPlan, TaskType, select_candidate_ids
+    from app.query_plan import FilterCondition, QueryPlan, TaskType, select_sku_ids
 
     plan = QueryPlan(task_type=TaskType.FIND_PRODUCT, filters=[
         FilterCondition(field="region", operator="eq", value="US"),
         FilterCondition(field="gross_margin_percent", operator="gte", value=40),
     ])
     with session_factory() as db:
-        assert select_candidate_ids(db, plan, tenant_id="course-demo") == ["SKU-CL-001", "SKU-PT-001"]
+        assert select_sku_ids(db, plan, tenant_id="course-demo") == ["SKU-CL-001", "SKU-PT-001"]

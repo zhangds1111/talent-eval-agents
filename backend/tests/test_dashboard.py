@@ -24,7 +24,7 @@ def test_dashboard_metrics_count_core_business_records():
         employee = EmployeeProfile(employee_no='E001', name='测试员工')
         db.add(employee)
         db.flush()
-        db.add(Document(candidate_id='E001', employee_id=employee.id, tenant_id='course-demo', title='简历', document_type='resume'))
+        db.add(Document(sku_id='E001', employee_id=employee.id, tenant_id='course-demo', title='简历', document_type='resume'))
         db.add(ProductConversationRecord(conversation_id='c1', title='会话', status='completed', latest_run_id='r1', created_at=now, updated_at=now))
         db.add(ProductRunRecord(run_id='r1', conversation_id='c1', turn_no=1, message='评估', status='completed', started_at=now, completed_at=now, updated_at=now))
         case = EvaluationCaseRecord(source_run_id='r1', conversation_id='c1', turn_no=1, module_key='request_understanding', invocation_no=1, input_payload={}, output_payload={})
