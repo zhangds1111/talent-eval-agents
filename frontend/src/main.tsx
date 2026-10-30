@@ -22,6 +22,8 @@ import { Dashboard } from "./Dashboard";
 import { ProductChatPage } from "./ProductChatPage";
 import "./style.css";
 import "./refinements.css";
+import "./theme.css";
+import { marginTone } from "./productFormat";
 
 const API = "http://127.0.0.1:18080/api";
 const TENANT_ID = "course-demo";
@@ -884,13 +886,20 @@ function App() {
                     <span>{item.model_no || "-"}</span>
                     <span>{item.department || "-"}</span>
                     <span>{item.current_position || "-"}</span>
-                    <span>
-                      {item.target_price != null
-                        ? `${item.target_price.toFixed(2)} / ${(item.landed_cost ?? 0).toFixed(2)} ${item.currency}`
-                        : "-"}
+                    <span className="priceCell">
+                      {item.target_price != null ? (
+                        <>
+                          <b>{item.target_price.toFixed(2)} <small>{item.currency}</small></b>
+                          <small>到岸 {(item.landed_cost ?? 0).toFixed(2)}</small>
+                        </>
+                      ) : (
+                        "-"
+                      )}
                     </span>
                     <span>
-                      <em>{item.gross_margin_percent != null ? `${item.gross_margin_percent.toFixed(1)}%` : "-"}</em>
+                      <em className={`marginBadge ${marginTone(item.gross_margin_percent)}`}>
+                        {item.gross_margin_percent != null ? `${item.gross_margin_percent.toFixed(1)}%` : "-"}
+                      </em>
                     </span>
                     <span>
                       <strong>{item.material_count} 份</strong>
