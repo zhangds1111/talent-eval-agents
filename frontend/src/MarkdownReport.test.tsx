@@ -30,3 +30,18 @@ describe("MarkdownReport", () => {
     expect(html).toContain('class="citationLink"');
   });
 });
+
+describe("MarkdownReport product sections", () => {
+  it("marks program and risk sections and adds certification badges", () => {
+    const html = renderToStaticMarkup(
+      <MarkdownReport
+        text={["### 程序核算（非模型生成）", "", "- 必需认证 UN38.3：缺有效证据：已过期", "", "### 风险与缺失", "", "- 缺少 SDS 文件"].join("\n")}
+        onCitation={vi.fn()}
+      />,
+    );
+    expect(html).toContain('class="reportSection program"');
+    expect(html).toContain('class="reportSection risk"');
+    expect(html).toContain('class="statusBadge expired"');
+    expect(html).toContain('class="statusBadge missing"');
+  });
+});

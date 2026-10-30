@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { FeedbackButton, StepCaseFeedback } from "./EvaluationCenter";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -34,6 +34,7 @@ import {
   type RunView,
   type RunStep,
 } from "./productRunState";
+import { CERTIFICATION_LABELS, certificationStatus, reportSectionKind } from "./productFormat";
 import "./product-chat.css";
 import "./product-conversation.css";
 import "./product-chat-interactions.css";
@@ -88,6 +89,16 @@ async function requestJson(url: string, options?: RequestInit) {
   return response.json();
 }
 
+function textOf(node: ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  if (typeof node === "object" && "props" in node) {
+    return textOf((node as { props: { children?: ReactNode } }).props.children);
+  }
+  return "";
+}
+
 export function MarkdownReport({ text, onCitation }: { text: string; onCitation: (ref: string) => void }) {
   return (
     <div className="reportMarkdown">
@@ -95,6 +106,19 @@ export function MarkdownReport({ text, onCitation }: { text: string; onCitation:
         remarkPlugins={[remarkGfm]}
         skipHtml
         components={{
+          h3({ children }) {
+            const kind = reportSectionKind(textOf(children));
+            return <h3 className={kind ? `reportSection ${kind}` : undefined}>{children}</h3>;
+          },
+          li({ children }) {
+            const status = certificationStatus(textOf(children));
+            return (
+              <li className={status ? `hasStatus ${status}` : undefined}>
+                {status && <span className={`statusBadge ${status}`}>{CERTIFICATION_LABELS[status]}</span>}
+                {children}
+              </li>
+            );
+          },
           a({ href, children }) {
             const label = String(children);
             const citation = label.match(/^E\d+$/);
