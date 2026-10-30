@@ -1,0 +1,73 @@
+/* ProductOS 骨架屏（加载态占位） · 查验工作台配色
+   骨架与真实行/卡片同尺寸：表格行复用 .tr 网格，卡片复用外层网格类；
+   shimmer 动效在 prefers-reduced-motion: reduce 下关闭，退化为静态灰条。 */
+
+.skeletonLine,
+.skeletonBlock {
+  display: block;
+  min-height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e6ece4 25%, #f2f7ee 50%, #e6ece4 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: 180% 0; }
+  100% { background-position: -180% 0; }
+}
+
+/* 表格骨架：直接借用真实 .tr 的网格列宽与行高 */
+.tr.skeletonRow { border-bottom-color: #ebefe8; }
+.tr.skeletonRow .skeletonLine { height: 13px; }
+
+/* 非表格列表骨架（对话列表等）：每项两行 */
+.skeletonList { display: grid; gap: 6px; padding: 2px 0; }
+.skeletonItem {
+  display: grid; gap: 9px; padding: 11px 13px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface);
+}
+.skeletonItem .skeletonLine { height: 12px; }
+.skeletonItem .skeletonLine.wide { width: 78%; }
+.skeletonItem .skeletonLine.short { width: 44%; }
+
+/* 卡片骨架（工作台指标卡 / 知识库卡）：图标块 + 两行，外层复用真实网格类 */
+.skeletonCards { display: grid; gap: 18px; }
+.skeletonCard {
+  display: flex; align-items: center; gap: 16px; padding: 24px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow-1);
+}
+.skeletonIcon { width: 48px; height: 48px; border-radius: 11px; flex: none; }
+.skeletonStack { display: grid; gap: 10px; flex: 1; min-width: 0; }
+.skeletonStack .skeletonLine { height: 13px; }
+
+/* 评测中心表格骨架（table 结构） */
+.skeletonTableWrap td { padding: 15px 14px; border-top: 1px solid #ebefe8; }
+.skeletonTableWrap tr:first-child td { border-top: 0; }
+.skeletonTableWrap .skeletonLine { height: 13px; }
+
+/* 加载失败块：错误提示 + 重试按钮（查验警示红） */
+.loadError {
+  display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;
+  padding: 26px 18px; border: 1px dashed #e0bab4; border-radius: var(--radius);
+  background: var(--bad-soft); color: var(--bad); font-size: 13.5px;
+}
+.loadError button {
+  border: 1px solid #e3b8b3; border-radius: var(--radius-sm); background: var(--surface);
+  color: var(--bad); padding: 6px 14px; font-weight: 650;
+  transition: background 0.15s, border-color 0.15s;
+}
+.loadError button:hover { background: #fff; border-color: #d69f98; }
+
+/* 评测中心错误条内的重试按钮 */
+.evaluationError .evaluationRetry {
+  margin-left: 10px; padding: 3px 12px; border-radius: 6px;
+  border: 1px solid currentColor; background: transparent; color: inherit; font-weight: 650;
+}
+.evaluationError .evaluationRetry:hover { background: rgba(179, 55, 46, 0.08); }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonLine,
+  .skeletonBlock { animation: none; background: #e6ece4; }
+}

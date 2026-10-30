@@ -23,7 +23,10 @@ import { ProductChatPage } from "./ProductChatPage";
 import "./style.css";
 import "./refinements.css";
 import "./theme.css";
+import "./skeleton.css";
 import { marginTone } from "./productFormat";
+import { countText, toErrorMessage, type LoadState } from "./loadState";
+import { LoadError, SkeletonCards, SkeletonRows } from "./LoadStateView";
 
 const API = "http://127.0.0.1:18080/api";
 const TENANT_ID = "course-demo";
@@ -552,20 +555,31 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [pipelineFilter, setPipelineFilter] = useState("");
+  const [recordsState, setRecordsState] = useState<LoadState<null>>({ status: "loading" });
 
   async function load(preferredKnowledgeBaseId = kb) {
-    const [employeeRows, kbRows] = await Promise.all([
-      json(`${API}/employees`),
-      json(`${API}/knowledge-bases`),
-    ]);
-    const activeKnowledgeBaseId = kbRows.some((item: KB) => item.id === preferredKnowledgeBaseId)
-      ? preferredKnowledgeBaseId
-      : kbRows[0]?.id || "";
-    const documentRows = await json(`${API}/documents${activeKnowledgeBaseId ? `?knowledge_base_id=${activeKnowledgeBaseId}` : ""}`);
-    setEmployees(employeeRows);
-    setKbs(kbRows);
-    setDocs(documentRows);
-    setKb(activeKnowledgeBaseId);
+    try {
+      const [employeeRows, kbRows] = await Promise.all([
+        json(`${API}/employees`),
+        json(`${API}/knowledge-bases`),
+      ]);
+      const activeKnowledgeBaseId = kbRows.some((item: KB) => item.id === preferredKnowledgeBaseId)
+        ? preferredKnowledgeBaseId
+        : kbRows[0]?.id || "";
+      const documentRows = await json(`${API}/documents${activeKnowledgeBaseId ? `?knowledge_base_id=${activeKnowledgeBaseId}` : ""}`);
+      setEmployees(employeeRows);
+      setKbs(kbRows);
+      setDocs(documentRows);
+      setKb(activeKnowledgeBaseId);
+      setRecordsState({ status: "success", data: null });
+    } catch (err) {
+      // 轮询期间的瞬时失败不覆盖已加载数据；首次加载或持续失败才进入错误态
+      setRecordsState((current) =>
+        current.status === "success"
+          ? current
+          : { status: "error", error: toErrorMessage(err, "商品档案加载失败") },
+      );
+    }
   }
 
   async function openDocument(id: string) {
@@ -860,9 +874,9 @@ function App() {
                     placeholder="搜索 SKU 编号、名称、子类或品类"
                   />
                 </label>
-                <span>{filteredEmployees.length} 个 SKU</span>
+                <span>{countText(recordsState, () => `${filteredEmployees.length} 个 SKU`)}</span>
               </div>
-              <div className="table roster">
+              <div className="table roster" aria-busy={recordsState.status === "loading"}>
                 <div className="tr th">
                   <span>SKU</span>
                   <span>目标市场</span>
@@ -873,7 +887,16 @@ function App() {
                   <span>毛利率</span>
                   <span>关联材料</span>
                 </div>
-                {pagedEmployees.map((item) => (
+                {recordsState.status === "loading" ? (
+                  <SkeletonRows rows={6} columns={8} />
+                ) : recordsState.status === "error" ? (
+                  <LoadError message={recordsState.error} onRetry={() => void load()} />
+                ) : pagedEmployees.length === 0 ? (
+                  <div className="empty compact rosterEmpty">
+                    {query ? "没有匹配的 SKU，换个关键词试试" : "暂无 SKU，点击右上角「新建商品」开始录入"}
+                  </div>
+                ) : (
+                pagedEmployees.map((item) => (
                   <div className="tr" key={item.id}>
                     <span className="person">
                       <i>{item.name.slice(-2)}</i>
@@ -905,9 +928,10 @@ function App() {
                       <strong>{item.material_count} 份</strong>
                     </span>
                   </div>
-                ))}
+                ))
+                )}
               </div>
-              <Pagination page={rosterPage} total={filteredEmployees.length} onChange={setRosterPage} />
+              {recordsState.status === "success" && <Pagination page={rosterPage} total={filteredEmployees.length} onChange={setRosterPage} />}
             </>
           ) : (
             <>
@@ -954,10 +978,14 @@ function App() {
                 <div className="managerHead">
                   <div>
                     <h2>知识库管理</h2>
-                    <p>共 {kbs.length} 个知识库，删除前需要先清空其中的材料</p>
+                    <p>{countText(recordsState, () => `共 ${kbs.length} 个知识库，删除前需要先清空其中的材料`)}</p>
                   </div>
                 </div>
-                {kbs.length === 0 ? (
+                {recordsState.status === "loading" ? (
+                  <SkeletonCards count={3} className="knowledgeBaseGrid" />
+                ) : recordsState.status === "error" ? (
+                  <LoadError message={recordsState.error} onRetry={() => void load()} />
+                ) : kbs.length === 0 ? (
                   <div className="empty compact">暂无知识库，先新建知识库再上传材料</div>
                 ) : (
                   <div className="knowledgeBaseGrid">
@@ -1020,9 +1048,9 @@ function App() {
                       ))}
                     </select>
                   </label>
-                  <span>{filteredDocs.length} 份材料</span>
+                  <span>{countText(recordsState, () => `${filteredDocs.length} 份材料`)}</span>
                 </div>
-                <div className="table docs">
+                <div className="table docs" aria-busy={recordsState.status === "loading"}>
                   <div className="tr th">
                     <span className="checkCell">
                       <input type="checkbox" checked={allVisibleSelected} onChange={(event) => togglePageSelection(event.target.checked)} />
@@ -1034,7 +1062,18 @@ function App() {
                     <span>更新时间</span>
                     <span />
                   </div>
-                  {pagedDocs.map((item) => (
+                  {recordsState.status === "loading" ? (
+                    <SkeletonRows rows={6} columns={7} />
+                  ) : recordsState.status === "error" ? (
+                    <LoadError message={recordsState.error} onRetry={() => void load()} />
+                  ) : pagedDocs.length === 0 ? (
+                    <div className="empty compact">
+                      {query || pipelineFilter
+                        ? "没有符合条件的材料，调整搜索或状态筛选试试"
+                        : "当前知识库暂无材料，点击右上角「上传材料」添加档案"}
+                    </div>
+                  ) : (
+                  pagedDocs.map((item) => (
                     <div className="tr docRow" key={item.id}>
                       <span className="checkCell">
                         <input
@@ -1070,9 +1109,10 @@ function App() {
                         </button>
                       </span>
                     </div>
-                  ))}
+                  ))
+                  )}
                 </div>
-                <Pagination page={docPage} total={filteredDocs.length} onChange={setDocPage} />
+                {recordsState.status === "success" && <Pagination page={docPage} total={filteredDocs.length} onChange={setDocPage} />}
               </div>
             </>
           )}

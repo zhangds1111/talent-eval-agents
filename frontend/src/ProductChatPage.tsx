@@ -35,6 +35,8 @@ import {
   type RunStep,
 } from "./productRunState";
 import { CERTIFICATION_LABELS, certificationStatus, reportSectionKind } from "./productFormat";
+import { toErrorMessage, type LoadState } from "./loadState";
+import { LoadError, SkeletonList } from "./LoadStateView";
 import "./product-chat.css";
 import "./product-conversation.css";
 import "./product-chat-interactions.css";
@@ -164,12 +166,23 @@ export function ProductChatPage({ apiBase, sidebarCollapsed, onToggleSidebar, on
   const [expandedRunIds, setExpandedRunIds] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<ConversationSummary[]>([]);
   const [historyStatus, setHistoryStatus] = useState("");
+  const [historyState, setHistoryState] = useState<LoadState<null>>({ status: "loading" });
   const sourceRef = useRef<EventSource | null>(null);
 
   async function loadHistory() {
-    const query = historyStatus ? `?status=${historyStatus}` : "";
-    const items = await requestJson(`${apiBase}/conversations${query}`);
-    setHistory(items as ConversationSummary[]);
+    try {
+      const query = historyStatus ? `?status=${historyStatus}` : "";
+      const items = await requestJson(`${apiBase}/conversations${query}`);
+      setHistory(items as ConversationSummary[]);
+      setHistoryState({ status: "success", data: null });
+    } catch (error) {
+      // 运行结束后的刷新失败不覆盖已有会话列表；首次加载失败才进入错误态
+      setHistoryState((current) =>
+        current.status === "success"
+          ? current
+          : { status: "error", error: toErrorMessage(error, "会话列表加载失败") },
+      );
+    }
   }
 
   useEffect(() => {
@@ -322,7 +335,16 @@ export function ProductChatPage({ apiBase, sidebarCollapsed, onToggleSidebar, on
           <aside className="conversationRail">
             <button className="newConversation" onClick={reset}><MessageSquarePlus />新建会话</button>
             <label className="conversationFilter">状态筛选<select value={historyStatus} onChange={(event) => setHistoryStatus(event.target.value)}><option value="">全部</option><option value="running">进行中</option><option value="waiting_input">待确认</option><option value="completed">已完成</option><option value="failed">已失败</option><option value="cancelled">已取消</option></select></label>
-            <div className="conversationGroup"><small>会话列表</small>{history.map((item) => <button key={item.conversation_id} className={view.conversationId === item.conversation_id ? "active" : ""} onClick={() => void openHistory(item.latest_run_id)} title={item.title}>{item.title}<span>{runStatusLabel(item.status)} · {new Date(item.updated_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span></button>)}{history.length === 0 && <p className="emptyHistory">暂无对话记录</p>}</div>
+            <div className="conversationGroup"><small>会话列表</small>
+              {historyState.status === "loading" && history.length === 0 ? (
+                <SkeletonList rows={5} />
+              ) : historyState.status === "error" && history.length === 0 ? (
+                <LoadError message={historyState.error} onRetry={() => void loadHistory()} />
+              ) : (
+                history.map((item) => <button key={item.conversation_id} className={view.conversationId === item.conversation_id ? "active" : ""} onClick={() => void openHistory(item.latest_run_id)} title={item.title}>{item.title}<span>{runStatusLabel(item.status)} · {new Date(item.updated_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span></button>)
+              )}
+              {historyState.status === "success" && history.length === 0 && <p className="emptyHistory">暂无对话记录</p>}
+            </div>
           </aside>
           <div className="chatPanel">
             <div className="chatHero"><div><span className="assistantMark"><Sparkles /></span><div><h1>选品决策助手</h1><p>输入选品需求（目标市场、品类、售价、毛利、认证偏好等），系统将实时展示理解、检索、评估与报告过程</p></div></div>

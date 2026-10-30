@@ -1,4 +1,12 @@
 import {useEffect, useState} from 'react';
+import './skeleton.css';
+
+const DATASET_TABLE_HEADERS = ['选择','数据集 split','模块','source_case_id','创建时间'];
+function DatasetTableSkeleton() {
+  const widths = [42, 46, 58, 62, 54];
+  return <div className="evaluationTableWrap skeletonTableWrap" aria-hidden="true"><table><thead><tr>{DATASET_TABLE_HEADERS.map((header) => <th key={header}>{header}</th>)}</tr></thead>
+    <tbody>{Array.from({length: 6}, (_, row) => <tr key={row}>{DATASET_TABLE_HEADERS.map((_, column) => <td key={column}><span className="skeletonLine" style={{width: `${widths[column % widths.length]}%`}}/></td>)}</tr>)}</tbody></table></div>;
+}
 
 export async function evaluationPost(url: string, payload: unknown) {
   const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
@@ -51,8 +59,8 @@ export function DatasetReplay({apiBase, refresh, moduleLabels}: {apiBase:string;
   return <section>
     <div className="evaluationToolbar"><fieldset className="evaluationFilterFields" disabled={busy}><label>数据集 split<select value={split} onChange={e=>{setSplit(e.target.value);setOffset(0);}}><option value="">全部 split</option><option value="dev">dev · 开发集</option><option value="test">test · 测试集</option></select></label><label>模块<select value={module} onChange={e=>{setModule(e.target.value);setOffset(0);}}><option value="">全部模块</option>{Object.entries(moduleLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label></fieldset>
       <div className="evaluationActions"><span>已选 {selected.length} 条</span><div><button disabled={busy||loading} onClick={()=>setReload(x=>x+1)}>刷新</button><button className="evaluationPrimary" disabled={busy||!selected.length} onClick={replay}>{busy?'重放中…':'重放所选条目'}</button></div></div>
-    </div>{error&&<p role="alert" className="evaluationError">{error}</p>}
-    {loading?<p className="evaluationEmpty">加载数据集中…</p>:<><div className="evaluationTableWrap"><table><thead><tr><th>选择</th><th>数据集 split</th><th>模块</th><th>source_case_id</th><th>创建时间</th></tr></thead><tbody>{items.map(item=><tr className="evaluationClickableRow" tabIndex={0} aria-label={`数据集条目 ${item.id} 详情`} key={item.id} onClick={()=>setDetail(item)} onKeyDown={e=>{if(e.target===e.currentTarget&&(e.key==='Enter'||e.key===' ')){e.preventDefault();setDetail(item);}}}>
+    </div>{error&&<p role="alert" className="evaluationError">{error}<button type="button" className="evaluationRetry" onClick={()=>setReload(x=>x+1)}>重试</button></p>}
+    {loading?<DatasetTableSkeleton/>:<><div className="evaluationTableWrap"><table><thead><tr>{DATASET_TABLE_HEADERS.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{items.map(item=><tr className="evaluationClickableRow" tabIndex={0} aria-label={`数据集条目 ${item.id} 详情`} key={item.id} onClick={()=>setDetail(item)} onKeyDown={e=>{if(e.target===e.currentTarget&&(e.key==='Enter'||e.key===' ')){e.preventDefault();setDetail(item);}}}>
       <td onClick={e=>e.stopPropagation()}><input aria-label={`选择数据集 ${item.id}`} type="checkbox" disabled={busy} checked={selected.includes(item.id)} onChange={e=>setSelected(current=>e.target.checked?[...current,item.id]:current.filter(id=>id!==item.id))}/></td><td><span className="evaluationBadge">{item.dataset_split}</span></td><td>{moduleLabels[item.module_key]||item.module_key}</td><td className="evaluationId">{item.source_case_id}</td><td>{new Date(item.created_at).toLocaleString()}</td>
     </tr>)}</tbody></table></div>{!items.length&&<p className="evaluationEmpty">暂无符合条件的数据集条目</p>}</>}
     <div className="evaluationPagination"><span>每页 10 条 · 第 {offset/10+1} 页</span><div><button disabled={busy||loading||offset===0} onClick={()=>setOffset(offset-10)}>上一页</button><button disabled={busy||loading||!more} onClick={()=>setOffset(offset+10)}>下一页</button></div></div>
